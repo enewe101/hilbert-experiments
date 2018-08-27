@@ -3,6 +3,7 @@ import codecs
 from scipy import sparse
 import os
 from collections import Counter
+import numpy as np
 
 
 
@@ -71,46 +72,62 @@ def dict_to_sparse(d):
     return sparse.coo_matrix((V,(I,J))).tocsr()
 
 
-def save_cooccurrences(path, N_xx, dictionary):
-    sparse.save_npz(path + '.npz', N_xx)
+def sort_cooccurrence(N_xx, N_x, dictionary):
+    top_indices = np.argsort(-N_x.reshape((-1,)))
+    N_xx = N_xx[top_indices][:,top_indices]
+    N_x = N_x[top_indices]
+    dictionary = Dictionary([dictionary.tokens[i] for i in top_indices])
+    return N_xx, N_x, dictionary
+
+
+def truncate_cooccurrence(k, N_xx, N_x, dictionary):
+    N_xx = N_xx[:k][:,:k]
+    N_x = N_x[:k]
+    dictionary = Dictionary(dictionary.tokens[:k])
+    return N_xx, N_x, dictionary
+
+
+def save_cooccurrence(path, N_xx, N_x, dictionary):
+    sparse.save_npz(path + '.Nxx.npz', N_xx)
+    np.savez(path + '.Nx.npz', N_x)
     dictionary.save(path + '.dictionary')
 
 
-def load_cooccurrences(path):
+def load_cooccurrence(path):
     return (
-        sparse.load_npz(path + '.npz'),
+        sparse.load_npz(path + '.Nxx.npz'),
+        np.load(path + '.Nx.npz')['arr_0'],
         Dictionary.load(path + '.dictionary')
     )
 
 
-def extract_all(write_path, window, limit=None):
+def extract_all(in_paths, window, limit=None):
 
     dictionary = Dictionary()
     counter = Counter()
 
-    tokenized_fnames = list(prep.path_iteration.iter_tokenized_fnames())
     if limit is None:
-        total = len(tokenized_fnames)
+        total = len(in_paths)
     else:
-        total = min(len(tokenized_fnames), limit)
+        total = min(len(in_paths), limit)
 
-    for i, (dirname, in_fname) in enumerate(tokenized_fnames):
+    for i, in_path in enumerate(in_paths):
         if limit is not None and i >= limit:
             break
-        print '%.2f%%' % (float(i)/total), in_fname
-        in_path = prep.path_iteration.get_tokenized_path(dirname, in_fname)
+        print '%.2f%%' % (float(i)/total), os.path.basename(in_path)
         extract_cooccurrence_from_file(in_path, window, dictionary, counter)
 
     N_xx = dict_to_sparse(counter)
+    N_x = np.array(np.sum(N_xx, axis=1)).reshape(-1)
 
-    return N_xx, dictionary
+    N_xx, N_x, dictionary = sort_cooccurrence(N_xx, N_x, dictionary)
+
+    return N_xx, N_x, dictionary
 
 
-def extract_and_write_all(write_path, window, limit=None):
-    N_xx, dictionary = extract_all(write_path, window, limit)
-    save_cooccurrences(write_path, N_xx, dictionary)
-    return N_xx, dictionary
+def extract_and_write_all(in_paths, out_path, window, limit=None):
+    N_xx, N_x, dictionary = extract_all(in_paths, window, limit)
+    save_cooccurrence(out_path, N_xx, N_xx, dictionary)
+    return N_xx, N_x, dictionary
     
-    
-
 

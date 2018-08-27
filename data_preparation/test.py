@@ -1,6 +1,6 @@
 from unittest import main, TestCase
 import os
-import data_preparation as prep
+import data_preparation as dp
 from collections import Counter
 from itertools import izip
 import numpy as np
@@ -9,8 +9,8 @@ import numpy as np
 class TestDictionary(TestCase):
 
     def get_test_dictionary(self):
-        tokens = prep.path_iteration.get_test_tokens()
-        return tokens, prep.extract_cooccurrence.Dictionary(tokens)
+        tokens = dp.path_iteration.get_test_tokens()
+        return tokens, dp.extract_cooccurrence.Dictionary(tokens)
 
 
     def test_dictionary(self):
@@ -25,7 +25,7 @@ class TestDictionary(TestCase):
 
 
     def test_save_load_dictionary(self):
-        write_path = prep.path_iteration.get_test_write_path('test.dictionary')
+        write_path = dp.path_iteration.get_test_write_path('test.dictionary')
 
         # Remove files that could be left from a previous test.
         if os.path.exists(write_path):
@@ -34,7 +34,7 @@ class TestDictionary(TestCase):
 
         tokens, dictionary = self.get_test_dictionary()
         dictionary.save(write_path)
-        loaded_dictionary = prep.extract_cooccurrence.Dictionary.load(
+        loaded_dictionary = dp.extract_cooccurrence.Dictionary.load(
             write_path)
 
         self.assertEqual(loaded_dictionary.tokens, dictionary.tokens)
@@ -74,12 +74,12 @@ class TestCooccurrenceExtraction(TestCase):
     def test_extract_cooccurrence_from_file(self):
 
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
-        dictionary = prep.extract_cooccurrence.Dictionary()
+        dictionary = dp.extract_cooccurrence.Dictionary()
         counter = Counter()
 
-        paths = prep.path_iteration.iter_test_paths()
+        paths = dp.path_iteration.iter_test_paths()
         for path in paths:
-            prep.extract_cooccurrence.extract_cooccurrence_from_file(
+            dp.extract_cooccurrence.extract_cooccurrence_from_file(
                 path, 2, dictionary, counter)
 
         for (idx1, idx2), found_count in counter.items():
@@ -93,15 +93,15 @@ class TestCooccurrenceExtraction(TestCase):
     def test_dict_to_sparse(self):
 
         # Extract counts from the test file
-        dictionary = prep.extract_cooccurrence.Dictionary()
+        dictionary = dp.extract_cooccurrence.Dictionary()
         counter = Counter()
-        paths = prep.path_iteration.iter_test_paths()
+        paths = dp.path_iteration.iter_test_paths()
         for path in paths:
-            prep.extract_cooccurrence.extract_cooccurrence_from_file(
+            dp.extract_cooccurrence.extract_cooccurrence_from_file(
                 path, 2, dictionary, counter)
 
         # Make a sparse matrix
-        csr_matrix = prep.extract_cooccurrence.dict_to_sparse(counter)
+        csr_matrix = dp.extract_cooccurrence.dict_to_sparse(counter)
 
         # Verify that the sparse matrix contained all the right data
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
@@ -116,45 +116,93 @@ class TestCooccurrenceExtraction(TestCase):
 
     def test_write_read_cooccurrence(self):
 
-        write_path = prep.path_iteration.get_test_write_path('cooccurrences')
+        write_path = dp.path_iteration.get_test_write_path('cooccurrence')
 
         # Remove files that could be left from a previous test.
-        if os.path.exists(write_path + '.npz'):
-            os.remove(write_path + '.npz')
+        if os.path.exists(write_path + '.Nxx.npz'):
+            os.remove(write_path + '.Nxx.npz')
+        if os.path.exists(write_path + '.Nx.npz'):
+            os.remove(write_path + '.Nx.npz')
         if os.path.exists(write_path + '.dictionary'):
             os.remove(write_path + '.dictionary')
 
         # Extract counts from the test file
-        dictionary1 = prep.extract_cooccurrence.Dictionary()
+        dictionary = dp.extract_cooccurrence.Dictionary()
         counter = Counter()
-        paths = prep.path_iteration.iter_test_paths()
+        paths = dp.path_iteration.iter_test_paths()
         for path in paths:
-            prep.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary1, counter)
+            dp.extract_cooccurrence.extract_cooccurrence_from_file(
+                path, 2, dictionary, counter)
 
         # Make a sparse matrix
-        csr_matrix1 = prep.extract_cooccurrence.dict_to_sparse(counter)
+        N_xx = dp.extract_cooccurrence.dict_to_sparse(counter)
+        N_x = np.sum(N_xx, axis=1)
 
-        prep.extract_cooccurrence.save_cooccurrences(
-            prep.path_iteration.get_test_write_path('cooccurrences'),
-            csr_matrix1, dictionary1
+        dp.extract_cooccurrence.save_cooccurrence(
+            dp.path_iteration.get_test_write_path('cooccurrence'),
+            N_xx, N_x, dictionary
         )
 
-        csr_matrix2, dictionary2 = prep.extract_cooccurrence.load_cooccurrences(
-            prep.path_iteration.get_test_write_path('cooccurrences')
+        load_N_xx, load_N_x, load_dictionary = (
+            dp.extract_cooccurrence.load_cooccurrence(
+                dp.path_iteration.get_test_write_path('cooccurrence'))
         )
 
-        self.assertTrue(
-            np.allclose(csr_matrix1.todense(), csr_matrix2.todense()))
+        self.assertTrue(np.allclose(
+            N_xx.todense(), load_N_xx.todense()))
+        self.assertTrue(np.allclose(N_x, load_N_x))
 
-        self.assertEqual(dictionary2.tokens, dictionary1.tokens)
-        self.assertEqual(dictionary2.token_ids, dictionary1.token_ids)
+        self.assertEqual(load_dictionary.tokens, dictionary.tokens)
+        self.assertEqual(load_dictionary.token_ids, dictionary.token_ids)
 
         # Cleanup
-        os.remove(write_path + '.npz')
+        os.remove(write_path + '.Nxx.npz')
+        os.remove(write_path + '.Nx.npz')
         os.remove(write_path + '.dictionary')
 
 
+
+    def test_extract_and_write_all(self):
+
+        expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
+
+        window = 2
+        paths = list(dp.path_iteration.iter_test_paths())
+        out_path = dp.path_iteration.get_test_write_path(
+            'test_extract_and_write_all')
+        N_xx, N_x, dictionary = dp.extract_cooccurrence.extract_and_write_all(
+            paths, out_path, window)
+
+        for (token1, token2), count in expected_counts.iteritems():
+            idx1, idx2 = dictionary.get_id(token1), dictionary.get_id(token2)
+            self.assertEqual(N_xx[idx1,idx2], count)
+
+        N_x_sorted = np.sort(N_x)[::-1]
+        self.assertTrue(np.allclose(N_x_sorted, N_x))
+        N_x_summed = np.array(np.sum(N_xx, axis=1)).reshape(-1)
+        self.assertTrue(np.allclose(N_x_summed, N_x))
+
+
+    def test_truncate_cooccurrence(self):
+        paths = list(dp.path_iteration.iter_test_paths())
+        window = 2
+        N_xx, N_x, dictionary = dp.extract_cooccurrence.extract_all(
+            paths, window)
+        self.assertEqual(N_xx.shape, (11,11))
+        self.assertEqual(N_x.shape, (11,))
+        self.assertEqual(len(dictionary.tokens), 11)
+        k = 6
+        N_xx_t, N_x_t, dictionary_t = (
+            dp.extract_cooccurrence.truncate_cooccurrence(
+                k, N_xx, N_x, dictionary))
+        self.assertTrue(
+            np.allclose(N_xx_t.todense(), N_xx[:6][:,:6].todense()))
+        self.assertTrue(np.allclose(N_x_t, N_x[:6]))
+        self.assertEqual(dictionary_t.tokens, dictionary.tokens[:6])
+        self.assertEqual(
+            dictionary_t.token_ids, 
+            {t:i for i,t in enumerate(dictionary.tokens[:6])}
+        )
 
 
 

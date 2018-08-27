@@ -46,8 +46,8 @@ def get_test_tokens():
 
 
 def iter_corenlp_paths():
-    for fname in iter_test_fnames():
-        yield get_corenlp_path(fname)
+    for dirname, fname in iter_corenlp_fnames():
+        yield get_corenlp_path(dirname, fname)
 
 def iter_corenlp_fnames():
     for dirname in os.listdir(prep.CONSTANTS.CORENLP_DIR):
@@ -59,8 +59,8 @@ def iter_corenlp_fnames():
 
 
 def iter_tokenized_paths():
-    for fname in iter_test_fnames():
-        yield get_tokenized_path(fname)
+    for dirname, fname in iter_tokenized_fnames():
+        yield get_tokenized_path(dirname, fname)
 
 def iter_tokenized_fnames():
     for dirname in os.listdir(prep.CONSTANTS.TOKENIZED_DIR):
