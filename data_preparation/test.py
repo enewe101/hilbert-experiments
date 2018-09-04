@@ -1,9 +1,12 @@
-from unittest import main, TestCase
 import os
-import data_preparation as dp
-from collections import Counter
+import shutil
 from itertools import izip
+from collections import Counter
+
 import numpy as np
+from unittest import main, TestCase
+
+import data_preparation as dp
 
 
 class TestDictionary(TestCase):
@@ -44,6 +47,72 @@ class TestDictionary(TestCase):
         os.remove(write_path)
 
 
+class TestPathIteration(TestCase):
+
+    def test_iter_gigaword_fnames_in_sector(self):
+        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fnames = open(expected_fname_path).read().split()
+        expected_fnames = { ('000', fname) for fname in expected_fnames }
+        found_fnames = set(
+            dp.path_iteration.iter_gigaword_fnames_in_sector('000'))
+        self.assertEqual(found_fnames, expected_fnames)
+
+
+    def test_iter_gigaword_paths_in_sector(self):
+        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fnames = open(expected_fname_path).read().split()
+        expected_paths = {
+            dp.path_iteration.get_gigaword_path('000', fname)
+            for fname in expected_fnames
+        }
+        found_paths = set(
+            dp.path_iteration.iter_gigaword_paths_in_sector('000'))
+        self.assertEqual(found_paths, expected_paths)
+
+
+    def test_get_gigaword_path(self):
+        expected_path = os.path.join(
+            dp.CONSTANTS.LOCAL_GIGAWORD_DIR, '000', 'CoreNLP', 'xyz.txt.xml')
+        found_path =  dp.path_iteration.get_gigaword_path('000', 'xyz.txt.xml')
+        self.assertEqual(found_path, expected_path)
+
+
+    def test_get_tokenized_path(self):
+        expected_path = os.path.join(
+            dp.CONSTANTS.TOKENIZED_DIR, '000', 'xyz.txt.xml')
+        found_path =  dp.path_iteration.get_tokenized_path('000', 'xyz.txt.xml')
+        self.assertEqual(found_path, expected_path)
+
+
+    def test_iter_tokenized_fnames_in_sector(self):
+        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fnames = [
+            fname[:-4]  # Strip off the ".xml"
+            for fname in open(expected_fname_path).read().split()
+        ]
+        expected_paths = {('000', fname) for fname in expected_fnames}
+        found_paths = set(
+            dp.path_iteration.iter_tokenized_fnames_in_sector('000'))
+        self.assertEqual(found_paths, expected_paths)
+
+
+    def test_iter_tokenized_paths_in_sector(self):
+        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fnames = [
+            fname[:-4]  # Strip off the ".xml"
+            for fname in open(expected_fname_path).read().split()
+        ]
+        expected_paths = {
+            dp.path_iteration.get_tokenized_path('000', fname)
+            for fname in expected_fnames
+        }
+        found_paths = set(
+            dp.path_iteration.iter_tokenized_paths_in_sector('000'))
+        self.assertEqual(found_paths, expected_paths)
+
+
+
+    
 
 class TestCooccurrenceExtraction(TestCase):
 
@@ -80,7 +149,7 @@ class TestCooccurrenceExtraction(TestCase):
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
             dp.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary, counter)
+                path, 2, dictionary, counter, verbose=False)
 
         for (idx1, idx2), found_count in counter.items():
             token1 = dictionary.get_token(idx1)
@@ -98,7 +167,7 @@ class TestCooccurrenceExtraction(TestCase):
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
             dp.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary, counter)
+                path, 2, dictionary, counter, verbose=False)
 
         # Make a sparse matrix
         csr_matrix = dp.extract_cooccurrence.dict_to_sparse(counter)
@@ -118,13 +187,16 @@ class TestCooccurrenceExtraction(TestCase):
 
         write_path = dp.path_iteration.get_test_write_path('cooccurrence')
 
-        # Remove files that could be left from a previous test.
-        if os.path.exists(write_path + '.Nxx.npz'):
-            os.remove(write_path + '.Nxx.npz')
-        if os.path.exists(write_path + '.Nx.npz'):
-            os.remove(write_path + '.Nx.npz')
-        if os.path.exists(write_path + '.dictionary'):
-            os.remove(write_path + '.dictionary')
+        if os.path.exists(write_path):
+            shutil.rmtree(write_path)
+
+        ## Remove files that could be left from a previous test.
+        #if os.path.exists(os.path.join(write_path, 'Nxx.npz')):
+        #    os.remove(os.path.join(write_path, 'Nxx.npz'))
+        #if os.path.exists(os.path.join(write_path, 'Nx.npz')):
+        #    os.remove(os.path.join(write_path, 'Nx.npz'))
+        #if os.path.exists(os.path.join(write_path, 'dictionary')):
+        #    os.remove(os.path.join(write_path, 'dictionary'))
 
         # Extract counts from the test file
         dictionary = dp.extract_cooccurrence.Dictionary()
@@ -132,7 +204,7 @@ class TestCooccurrenceExtraction(TestCase):
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
             dp.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary, counter)
+                path, 2, dictionary, counter, verbose=False)
 
         # Make a sparse matrix
         N_xx = dp.extract_cooccurrence.dict_to_sparse(counter)
@@ -156,20 +228,24 @@ class TestCooccurrenceExtraction(TestCase):
         self.assertEqual(load_dictionary.token_ids, dictionary.token_ids)
 
         # Cleanup
-        os.remove(write_path + '.Nxx.npz')
-        os.remove(write_path + '.Nx.npz')
-        os.remove(write_path + '.dictionary')
+        shutil.rmtree(write_path)
+        #os.remove(os.path.join(write_path, 'Nxx.npz'))
+        #os.remove(os.path.join(write_path, 'Nx.npz'))
+        #os.remove(os.path.join(write_path, 'dictionary'))
 
 
 
     def test_extract_and_write_all(self):
 
+        window = 2
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
 
-        window = 2
         paths = list(dp.path_iteration.iter_test_paths())
         out_path = dp.path_iteration.get_test_write_path(
             'test_extract_and_write_all')
+        if os.path.exists(out_path):
+            shutil.rmtree(out_path)
+
         N_xx, N_x, dictionary = dp.extract_cooccurrence.extract_and_write_all(
             paths, out_path, window)
 
@@ -182,12 +258,14 @@ class TestCooccurrenceExtraction(TestCase):
         N_x_summed = np.array(np.sum(N_xx, axis=1)).reshape(-1)
         self.assertTrue(np.allclose(N_x_summed, N_x))
 
+        shutil.rmtree(out_path)
+
 
     def test_truncate_cooccurrence(self):
         paths = list(dp.path_iteration.iter_test_paths())
         window = 2
         N_xx, N_x, dictionary = dp.extract_cooccurrence.extract_all(
-            paths, window)
+            paths, window, verbose=False)
         self.assertEqual(N_xx.shape, (11,11))
         self.assertEqual(N_x.shape, (11,))
         self.assertEqual(len(dictionary.tokens), 11)
@@ -203,6 +281,7 @@ class TestCooccurrenceExtraction(TestCase):
             dictionary_t.token_ids, 
             {t:i for i,t in enumerate(dictionary.tokens[:6])}
         )
+
 
 
 

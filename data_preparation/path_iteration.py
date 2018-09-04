@@ -1,26 +1,28 @@
 import os
-import data_preparation as prep
+import data_preparation as dp
+import re
 
 
 
-def get_corenlp_path(dirname, fname):
-    return os.path.join(prep.CONSTANTS.CORENLP_DIR, dirname, 'CoreNLP', fname)
+def get_gigaword_path(dirname, fname):
+    return os.path.join(
+        dp.CONSTANTS.LOCAL_GIGAWORD_DIR, dirname, 'CoreNLP', fname)
 
 
 def get_tokenized_path(dirname, fname):
-    return os.path.join(prep.CONSTANTS.TOKENIZED_DIR, dirname, fname)
+    return os.path.join(dp.CONSTANTS.TOKENIZED_DIR, dirname, fname)
 
 
 def get_test_path(fname):
-    return os.path.join(prep.CONSTANTS.TEST_DOCS_DIR, fname)
+    return os.path.join(dp.CONSTANTS.TEST_DOCS_DIR, fname)
 
 
 def get_cooccurrence_path(fname):
-    return os.path.join(prep.CONSTANTS.COOCCURRENCE_DIR, fname)
+    return os.path.join(dp.CONSTANTS.COOCCURRENCE_DIR, fname)
 
 
 def get_test_write_path(fname):
-    return os.path.join(prep.CONSTANTS.TEST_WRITE_DIR, fname)
+    return os.path.join(dp.CONSTANTS.TEST_WRITE_DIR, fname)
 
 
 def skip_file(fname):
@@ -36,26 +38,62 @@ def iter_test_paths():
         yield get_test_path(fname)
 
 def iter_test_fnames():
-    for path in os.listdir(prep.CONSTANTS.TEST_DOCS_DIR):
+    for path in os.listdir(dp.CONSTANTS.TEST_DOCS_DIR):
         if not skip_file(path):
             yield os.path.basename(path)
 
 def get_test_tokens():
-    paths = prep.path_iteration.iter_test_paths()
-    return prep.extract_tokenized.read_tokens(paths)
+    paths = dp.path_iteration.iter_test_paths()
+    return dp.extract_tokenized.read_tokens(paths)
 
 
-def iter_corenlp_paths():
-    for dirname, fname in iter_corenlp_fnames():
-        yield get_corenlp_path(dirname, fname)
+def iter_gigaword_fnames():
+    """
+    Iterates (sector_name, fname) pairs for all of gigaword (all sectors):
+    """
+    for sector_name in os.listdir(dp.CONSTANTS.LOCAL_GIGAWORD_DIR):
+        gigaword_dir = os.path.join(
+            dp.CONSTANTS.LOCAL_GIGAWORD_DIR, sector_name, 'CoreNLP')
+        for sector_name, fname in iter_gigaword_fnames_in_sector(sector_name):
+            yield sector_name, fname
 
-def iter_corenlp_fnames():
-    for dirname in os.listdir(prep.CONSTANTS.CORENLP_DIR):
-        corenlp_dir = os.path.join(
-            prep.CONSTANTS.CORENLP_DIR, dirname, 'CoreNLP')
-        for fname in os.listdir(corenlp_dir):
-            if not skip_file(fname):
-                yield dirname, fname
+
+def iter_gigaword_fnames_in_sector(sector_name):
+    """
+    Iterates (sector_name, fname) pairs for one sector.
+    """
+    sector_dir = os.path.join(
+        dp.CONSTANTS.LOCAL_GIGAWORD_DIR, sector_name, 'CoreNLP')
+    for fname in os.listdir(sector_dir):
+        if not skip_file(fname):
+            yield sector_name, fname
+
+
+def iter_gigaword_paths_in_sector(sector_name):
+    """
+    Iterates full file path to all gigaword archive files from one sector.
+    """
+    for dirname, fname in iter_gigaword_fnames_in_sector(sector_name):
+        yield get_gigaword_path(dirname, fname)
+
+
+def iter_gigaword_paths():
+    for dirname, fname in iter_gigaword_fnames():
+        yield get_gigaword_path(dirname, fname)
+
+
+
+def iter_tokenized_fnames_in_sector(sector):
+    dirpath = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector)
+    for fname in os.listdir(dirpath):
+        if not skip_file(fname):
+            yield sector, fname
+
+def iter_tokenized_paths_in_sector(sector):
+    dirpath = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector)
+    for fname in os.listdir(dirpath):
+        if not skip_file(fname):
+            yield get_tokenized_path(sector, fname)
 
 
 def iter_tokenized_paths():
@@ -63,12 +101,21 @@ def iter_tokenized_paths():
         yield get_tokenized_path(dirname, fname)
 
 def iter_tokenized_fnames():
-    for dirname in os.listdir(prep.CONSTANTS.TOKENIZED_DIR):
+    for dirname in os.listdir(dp.CONSTANTS.TOKENIZED_DIR):
         tokenized_path = os.path.join(
-            prep.CONSTANTS.TOKENIZED_DIR, dirname)
+            dp.CONSTANTS.TOKENIZED_DIR, dirname)
         for fname in os.listdir(tokenized_path):
             if not skip_file(fname):
                 yield dirname, fname
     
 
+VALID_ARCHIVE_MATCHER = re.compile('[0-9a-f]{3,3}')
+def raise_if_sectors_not_all_valid(sectors):
+    all_valid_sectors = all(
+        VALID_ARCHIVE_MATCHER.match(sector) for sector in sectors)
+    if not all_valid_sectors:
+        raise ValueError(
+            'Gigaword-corenlp archive names should comprise three hexidecimal '
+            'digits.'
+        )
 
