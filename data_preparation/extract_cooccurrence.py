@@ -1,7 +1,6 @@
 import os
 import sys
 import codecs
-from itertools import izip
 from collections import Counter
 
 from scipy import sparse
@@ -10,135 +9,7 @@ import numpy as np
 import data_preparation as dp
 
 
-class Dictionary(object):
-
-    def __init__(self, tokens=None):
-        self.tokens = []
-        self.token_ids = {}
-        if tokens is not None:
-            for token in tokens:
-                self.add_token(token)
-
-    def get_id(self, token):
-        return self.token_ids[token]
-
-    def get_token(self, idx):
-        return self.tokens[idx]
-
-    def add_token(self, token):
-        if token not in self.token_ids:
-            idx = len(self.tokens)
-            self.token_ids[token] = idx
-            self.tokens.append(token)
-            return idx
-        return self.token_ids[token]
-
-    def save(self, path):
-        codecs.open(path, 'w', 'utf8').write('\n'.join(self.tokens))
-
-    @staticmethod
-    def load(path):
-        dictionary = Dictionary()
-        dictionary.tokens = open(path).read().split('\n')
-        dictionary.token_ids = {
-            token: idx 
-            for idx, token in enumerate(dictionary.tokens)
-        }
-        return dictionary
-
         
-
-class CooccurrenceStatistics(object):
-
-
-    def __init__(self, dictionary=None, counts=None, Nxx=None):
-        self.validate_args(dictionary, counts, Nxx)
-
-        if Nxx is None:
-            self.source_of_truth = 'counts'
-        else:
-            self.source_of_truth = 'Nxx'
-
-        self.dictionary = dictionary or Dictionary()
-        self.counts = counts or Counter()
-        self.Nxx = Nxx
-        self.dense_Nxx = None
-
-
-    def validate_args(self, dictionary, counts, Nxx):
-        if counts is not None and Nxx is not None:
-            raise ValueError(
-                'Non-empty CooccurrenceStatistics objects should be '
-                'instantiated by providing statistics either as a sparse '
-                'matrix (Nxx) or a counter (counts)---not both.'
-            )
-
-        if counts is not None or Nxx is not None:
-            if dictionary is None:
-                raise ValueError(
-                    'A dictionary must be provided to create a non-empty '
-                    'CooccurrenceStatistics object.'
-                )
-
-
-    def add(self, token1, token2):
-        id1 = self.dictionary.add_token(token1)
-        id2 = self.dictionary.add_token(token2)
-        self.counts[id1, id2] += 1
-
-
-    def uncompile1(self):
-        Nxx_coo = self.Nxx.tocoo()
-        self.counts = Counter()
-        for i,j,v in izip(Nxx_coo.row, Nxx_coo.col, Nxx_coo.data):
-            self.counts[i,j] = v
-
-
-    def compile(self):
-        self.Nxx = dict_to_sparse(self.counter)
-        self.Nx = np.array(np.sum(self.Nxx, axis=1)).reshape(-1)
-        self.sort()
-
-
-    def sort(self, Nxx, Nx, dictionary):
-        top_indices = np.argsort(-self.Nx.reshape((-1,)))
-        self.Nxx = self.Nxx[top_indices][:,top_indices]
-        self.Nx = Nx[top_indices]
-        self.dictionary = Dictionary([
-            self.dictionary.tokens[i] for i in top_indices])
-
-
-    def save(self, path):
-        os.makedirs(path)
-        sparse.save_npz(os.path.join(path, 'Nxx.npz'), Nxx)
-        np.savez(os.path.join(path, 'Nx.npz'), Nx)
-        self.dictionary.save(os.path.join(path, 'dictionary'))
-
-
-    def density(self, threshold_count=0):
-        num_cells = np.prod(self.Nxx.shape)
-        num_filled = (
-            self.Nxx.getnnz() if threshold_count == 0 
-            else np.sum(self.Nxx>threshold_count)
-        )
-        return float(num_filled) / num_cells
-
-
-    def truncate(self, k):
-        self.Nxx = Nxx[:k][:,:k]
-        self.Nx = Nx[:k]
-        dictionary = Dictionary(dictionary.tokens[:k])
-        return Nxx, Nx, dictionary
-
-
-    @staticmethod
-    def load_cooccurrence(path):
-        return CooccurrenceStatistics(
-            Nxx = sparse.load_npz(os.path.join(path, 'Nxx.npz')),
-            dictionary=Dictionary.load(os.path.join(path, 'dictionary'))
-        )
-
-
 
 
 def density(N_xx, threshold_count=0):
@@ -185,14 +56,15 @@ def sort_cooccurrence(N_xx, N_x, dictionary):
     top_indices = np.argsort(-N_x.reshape((-1,)))
     N_xx = N_xx[top_indices][:,top_indices]
     N_x = N_x[top_indices]
-    dictionary = Dictionary([dictionary.tokens[i] for i in top_indices])
+    dictionary = dp.dictionary.Dictionary([
+        dictionary.tokens[i] for i in top_indices])
     return N_xx, N_x, dictionary
 
 
 def truncate_cooccurrence(k, N_xx, N_x, dictionary):
     N_xx = N_xx[:k][:,:k]
     N_x = N_x[:k]
-    dictionary = Dictionary(dictionary.tokens[:k])
+    dictionary = dp.dictionary.Dictionary(dictionary.tokens[:k])
     return N_xx, N_x, dictionary
 
 
@@ -208,13 +80,13 @@ def load_cooccurrence(path):
     return (
         sparse.load_npz(os.path.join(path, 'Nxx.npz')),
         np.load(os.path.join(path, 'Nx.npz'))['arr_0'],
-        Dictionary.load(os.path.join(path, 'dictionary'))
+        dp.dictionary.Dictionary.load(os.path.join(path, 'dictionary'))
     )
 
 
 def extract_all(in_paths, window, limit=None, verbose=False):
 
-    dictionary = Dictionary()
+    dictionary = dp.dictionary.Dictionary()
     counter = Counter()
     if not isinstance(in_paths, list):
         in_paths = list(in_paths)

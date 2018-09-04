@@ -26,7 +26,7 @@ def get_test_write_path(fname):
 
 
 def skip_file(fname):
-    if fname.startswith('.nfs'):
+    if fname.startswith('.'):
         return True
     if fname.endswith('.swp') or fname.endswith('.swo'):
         return True

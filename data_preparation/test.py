@@ -13,7 +13,7 @@ class TestDictionary(TestCase):
 
     def get_test_dictionary(self):
         tokens = dp.path_iteration.get_test_tokens()
-        return tokens, dp.extract_cooccurrence.Dictionary(tokens)
+        return tokens, dp.dictionary.Dictionary(tokens)
 
 
     def test_dictionary(self):
@@ -37,7 +37,7 @@ class TestDictionary(TestCase):
 
         tokens, dictionary = self.get_test_dictionary()
         dictionary.save(write_path)
-        loaded_dictionary = dp.extract_cooccurrence.Dictionary.load(
+        loaded_dictionary = dp.dictionary.Dictionary.load(
             write_path)
 
         self.assertEqual(loaded_dictionary.tokens, dictionary.tokens)
@@ -143,13 +143,14 @@ class TestCooccurrenceExtraction(TestCase):
     def test_extract_cooccurrence_from_file(self):
 
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
-        dictionary = dp.extract_cooccurrence.Dictionary()
+        dictionary = dp.dictionary.Dictionary()
         counter = Counter()
 
+        window = 2
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
             dp.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary, counter, verbose=False)
+                path, window, dictionary, counter, verbose=False)
 
         for (idx1, idx2), found_count in counter.items():
             token1 = dictionary.get_token(idx1)
@@ -162,12 +163,13 @@ class TestCooccurrenceExtraction(TestCase):
     def test_dict_to_sparse(self):
 
         # Extract counts from the test file
-        dictionary = dp.extract_cooccurrence.Dictionary()
+        window = 2
+        dictionary = dp.dictionary.Dictionary()
         counter = Counter()
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
             dp.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary, counter, verbose=False)
+                path, window, dictionary, counter, verbose=False)
 
         # Make a sparse matrix
         csr_matrix = dp.extract_cooccurrence.dict_to_sparse(counter)
@@ -199,12 +201,13 @@ class TestCooccurrenceExtraction(TestCase):
         #    os.remove(os.path.join(write_path, 'dictionary'))
 
         # Extract counts from the test file
-        dictionary = dp.extract_cooccurrence.Dictionary()
+        window = 2
+        dictionary = dp.dictionary.Dictionary()
         counter = Counter()
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
             dp.extract_cooccurrence.extract_cooccurrence_from_file(
-                path, 2, dictionary, counter, verbose=False)
+                path, window, dictionary, counter, verbose=False)
 
         # Make a sparse matrix
         N_xx = dp.extract_cooccurrence.dict_to_sparse(counter)
