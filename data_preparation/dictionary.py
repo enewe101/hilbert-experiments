@@ -36,3 +36,7 @@ class Dictionary(object):
         }
         return dictionary
 
+
+    def __len__(self):
+        return len(self.tokens)
+

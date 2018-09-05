@@ -3,3 +3,4 @@ import extract_tokenized
 import extract_cooccurrence
 import path_iteration
 import dictionary
+import cooccurrence_statistics

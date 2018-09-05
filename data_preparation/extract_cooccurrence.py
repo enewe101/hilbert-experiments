@@ -42,15 +42,6 @@ def extract_cooccurrence_from_file(
 
 
 
-def dict_to_sparse(d):
-    I, J, V = [], [], []
-    for (idx1, idx2), value in d.iteritems():
-        I.append(idx1)
-        J.append(idx2)
-        V.append(value)
-
-    return sparse.coo_matrix((V,(I,J))).tocsr()
-
 
 def sort_cooccurrence(N_xx, N_x, dictionary):
     top_indices = np.argsort(-N_x.reshape((-1,)))
@@ -104,7 +95,7 @@ def extract_all(in_paths, window, limit=None, verbose=False):
         extract_cooccurrence_from_file(
             in_path, window, dictionary, counter, verbose)
 
-    N_xx = dict_to_sparse(counter)
+    N_xx = dp.cooccurrence_statistics.dict_to_sparse(counter)
     N_x = np.array(np.sum(N_xx, axis=1)).reshape(-1)
 
     N_xx, N_x, dictionary = sort_cooccurrence(N_xx, N_x, dictionary)

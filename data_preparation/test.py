@@ -4,6 +4,7 @@ from itertools import izip
 from collections import Counter
 
 import numpy as np
+from scipy import sparse
 from unittest import main, TestCase
 
 import data_preparation as dp
@@ -45,6 +46,231 @@ class TestDictionary(TestCase):
 
         # Cleanup
         os.remove(write_path)
+
+
+class TestCooccurrenceStatistics(TestCase):
+
+    def get_test_cooccurrence_stats(self):
+        DICTIONARY = dp.dictionary.Dictionary([
+            'banana', 'socks', 'car', 'field'])
+        COUNTS = {
+            (0,1):3, (1,0):3,
+            (0,3):1, (3,0):1,
+            (2,1):1, (1,2):1,
+            (0,2):1, (2,0):1
+        }
+        DIJ = ([3,1,1,1,3,1,1,1], ([0,0,2,0,1,3,1,2], [1,3,1,2,0,0,2,0]))
+        ARRAY = np.array([[0,3,1,1],[3,0,1,0],[1,1,0,0],[1,0,0,0]])
+        return DICTIONARY, COUNTS, DIJ, ARRAY
+
+
+    def test_invalid_arguments(self):
+        dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
+
+        # Can make an empty CooccurrenceStatistics instance.
+        dp.cooccurrence_statistics.CooccurrenceStatistics()
+
+        # Can make a non-empty CooccurrenceStatistics instance using counts and
+        # a matching dictionary.
+        dp.cooccurrence_statistics.CooccurrenceStatistics(dictionary, counts)
+
+        # Must supply a dictionary to make a  non-empty CooccurrenceStatistics
+        # instance when using counts.
+        with self.assertRaises(ValueError):
+            dp.cooccurrence_statistics.CooccurrenceStatistics(
+                counts=counts)
+
+        # Can make a non-empty CooccurrenceStatistics instance using Nxx and
+        # a matching dictionary.
+        Nxx = sparse.coo_matrix(dij).tocsr()
+        dp.cooccurrence_statistics.CooccurrenceStatistics(dictionary, counts)
+
+        # Must supply a dictionary to make a  non-empty CooccurrenceStatistics
+        # instance when using Nxx.
+        with self.assertRaises(ValueError):
+            dp.cooccurrence_statistics.CooccurrenceStatistics(Nxx=Nxx)
+
+        # Cannot provide both an Nxx and counts
+        with self.assertRaises(ValueError):
+            dp.cooccurrence_statistics.CooccurrenceStatistics(
+                dictionary, counts, Nxx=Nxx)
+
+
+    def test_add_when_basis_is_counts(self):
+        dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
+        cooccurrence = dp.cooccurrence_statistics.CooccurrenceStatistics(
+            dictionary, counts)
+        cooccurrence.add('banana', 'rice')
+        self.assertEqual(cooccurrence.dictionary.get_id('rice'), 4)
+        expected_counts = Counter(counts)
+        expected_counts[0,4] += 1
+        self.assertEqual(cooccurrence.counts, expected_counts)
+
+
+    def test_add_when_basis_is_Nxx(self):
+
+        dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
+        Nxx = sparse.coo_matrix(dij)
+        Nx = np.array(np.sum(Nxx, axis=1)).reshape(-1)
+
+        # Create a cooccurrence instance using counts
+        cooccurrence = dp.cooccurrence_statistics.CooccurrenceStatistics(
+            dictionary, Nxx=Nxx, verbose=False)
+
+        # Currently the cooccurrence instance has no internal counter for
+        # cooccurrences, because it is based on the sparse array.
+        self.assertEqual(cooccurrence.counts, Counter())
+        self.assertTrue(np.allclose(cooccurrence.denseNxx, Nxx.todense()))
+        self.assertTrue(np.allclose(cooccurrence.Nx, Nx))
+        self.assertEqual(cooccurrence.basis, 'Nxx')
+
+        # Adding more cooccurrence statistics will force it to decompile into
+        # a counter, then add to the counter.  This will cause Nxx to be
+        # out of sync
+        cooccurrence.add('banana', 'rice')
+        cooccurrence.add('rice', 'banana')
+        self.assertFalse(cooccurrence.synced)
+        self.assertEqual(cooccurrence.basis, 'counts')
+
+        # Asking for denseNxx forces it to sync itself.  
+        # Ensure it it obtains the correct cooccurrence matrix
+        expected_Nxx = np.append(array, [[1],[0],[0],[0]], axis=1)
+        expected_Nxx = np.append(expected_Nxx, [[1,0,0,0,0]], axis=0)
+        expected_Nx = np.sum(expected_Nxx, axis=1)
+        self.assertTrue(np.allclose(cooccurrence.denseNxx, expected_Nxx))
+        self.assertTrue(np.allclose(cooccurrence.Nx, expected_Nx))
+        self.assertTrue(cooccurrence.synced)
+
+
+    def test_uncompile(self):
+        dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
+        Nxx = sparse.coo_matrix(dij)
+        Nx = np.array(np.sum(Nxx, axis=1)).reshape(-1)
+
+        # Create a cooccurrence instance using counts
+        cooccurrence = dp.cooccurrence_statistics.CooccurrenceStatistics(
+            dictionary, Nxx=Nxx, verbose=False)
+        self.assertEqual(cooccurrence.counts, Counter())
+        self.assertEqual(cooccurrence.basis, 'Nxx')
+
+        cooccurrence.decompile()
+        self.assertEqual(cooccurrence.counts, counts)
+        self.assertEqual(cooccurrence.basis, 'counts')
+        self.assertTrue(cooccurrence.synced)
+
+
+    def test_compile(self):
+
+        dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
+
+        # Create a cooccurrence instance using counts
+        cooccurrence = dp.cooccurrence_statistics.CooccurrenceStatistics(
+            dictionary, counts)
+
+        # The cooccurrence instance is not synced.  Attempting to access
+        # the Nxx value will cause it to sync.
+        self.assertFalse(cooccurrence.synced)
+        self.assertTrue(np.allclose(cooccurrence.denseNxx, array))
+        self.assertTrue(cooccurrence.synced)
+
+        # We can still add more counts.  This causes it to go back out of sync.
+        cooccurrence.add('banana', 'rice')
+        cooccurrence.add('rice', 'banana')
+        self.assertFalse(cooccurrence.synced)
+
+        # Asking for denseNxx forces it to sync itself.  
+        # Ensure it it obtains the correct cooccurrence matrix
+        expected_Nxx = np.append(array, [[1],[0],[0],[0]], axis=1)
+        expected_Nxx = np.append(expected_Nxx, [[1,0,0,0,0]], axis=0)
+        self.assertTrue(np.allclose(cooccurrence.denseNxx, expected_Nxx))
+        self.assertTrue(cooccurrence.synced)
+
+
+    def test_sort(self):
+        unsorted_dictionary = dp.dictionary.Dictionary([
+            'field', 'car', 'socks', 'banana'
+        ])
+        unsorted_counts = {
+            (0,3): 1, (3,0): 1,
+            (1,2): 1, (2,1): 1,
+            (1,3): 1, (3,1): 1,
+            (2,3): 3, (3,2): 3
+        }
+        unsorted_Nxx = np.array([
+            [0,0,0,1],
+            [0,0,1,1],
+            [0,1,0,3],
+            [1,1,3,0],
+        ])
+
+        sorted_dictionary = dp.dictionary.Dictionary([
+            'banana', 'socks', 'car', 'field'])
+        sorted_counts = {
+            (0,1):3, (1,0):3,
+            (0,3):1, (3,0):1,
+            (2,1):1, (1,2):1,
+            (0,2):1, (2,0):1
+        }
+        sorted_array = np.array([
+            [0,3,1,1],
+            [3,0,1,0],
+            [1,1,0,0],
+            [1,0,0,0]
+        ])
+
+        print len(unsorted_dictionary)
+        cooccurrence = dp.cooccurrence_statistics.CooccurrenceStatistics(
+            unsorted_dictionary, unsorted_counts
+        )
+
+        self.assertTrue(np.allclose(cooccurrence.denseNxx, sorted_array))
+        self.assertEqual(cooccurrence.counts, sorted_counts)
+        self.assertEqual(
+            cooccurrence.dictionary.tokens, sorted_dictionary.tokens)
+
+
+    def test_save_load(self):
+
+        write_path = dp.path_iteration.get_test_write_path(
+            'test-save-load-cooccurrences')
+        if os.path.exists(write_path):
+            shutil.rmtree(write_path)
+
+        dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
+
+        # Create a cooccurrence instance using counts
+        cooccurrence = dp.cooccurrence_statistics.CooccurrenceStatistics(
+            dictionary, counts)
+
+        # Save it, then load it
+        cooccurrence.save(write_path)
+        cooccurrence2 = dp.cooccurrence_statistics.CooccurrenceStatistics.load(
+            write_path)
+
+        self.assertEqual(
+            cooccurrence2.dictionary.tokens, 
+            cooccurrence.dictionary.tokens
+        )
+        self.assertEqual(cooccurrence2.counts, cooccurrence.counts)
+        self.assertTrue(np.allclose(
+            cooccurrence2.denseNxx, 
+            cooccurrence.denseNxx
+        ))
+        self.assertTrue(np.allclose(cooccurrence2.Nx, cooccurrence.Nx))
+
+        shutil.rmtree(write_path)
+
+
+    def test_density(self):
+        pass
+
+
+    def test_truncate(self):
+        pass
+
+
+
+
 
 
 class TestPathIteration(TestCase):
@@ -140,6 +366,7 @@ class TestCooccurrenceExtraction(TestCase):
     })
 
 
+
     def test_extract_cooccurrence_from_file(self):
 
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
@@ -172,7 +399,7 @@ class TestCooccurrenceExtraction(TestCase):
                 path, window, dictionary, counter, verbose=False)
 
         # Make a sparse matrix
-        csr_matrix = dp.extract_cooccurrence.dict_to_sparse(counter)
+        csr_matrix = dp.cooccurrence_statistics.dict_to_sparse(counter)
 
         # Verify that the sparse matrix contained all the right data
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
@@ -210,7 +437,7 @@ class TestCooccurrenceExtraction(TestCase):
                 path, window, dictionary, counter, verbose=False)
 
         # Make a sparse matrix
-        N_xx = dp.extract_cooccurrence.dict_to_sparse(counter)
+        N_xx = dp.cooccurrence_statistics.dict_to_sparse(counter)
         N_x = np.sum(N_xx, axis=1)
 
         dp.extract_cooccurrence.save_cooccurrence(
