@@ -35,8 +35,8 @@ setup(
         'word embeddings, NLP, word2vec, GloVe, FastText, skip-gram '
         'with negative sampling' 
     ),
-    packages=['data_preparation'],
+    packages=['data_preparation', 'embedding_creation'],
 	#indlude_package_data=True,
 	package_data={'': ['README.md']},
-	install_requires=['corenlpy', 'scipy']
+	install_requires=['corenlpy', 'scipy', 'hilbert']
 )

@@ -91,6 +91,9 @@ def iter_tokenized_fnames_in_sector(sector):
 
 def iter_tokenized_paths_in_sector(sector):
     dirpath = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector)
+    if not os.path.exists(dirpath):
+        print('WARNING: sector does not exist (%s).' % dirpath)
+        return
     for fname in os.listdir(dirpath):
         if not skip_file(fname):
             yield get_tokenized_path(sector, fname)

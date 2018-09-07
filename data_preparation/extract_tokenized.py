@@ -4,28 +4,33 @@ import sys
 import codecs
 
 import corenlpy
-import cluster_func
 
 import data_preparation as dp
 
 
 
 def read_tokens(paths):
-    return [token for path in paths for token in open(path).read().split()]
+    tokens = []
+    for path in paths:
+        with open(path) as f:
+            tokens.extend([token for token in f.read().split()])
+    return tokens
 
 
 
 def extract_tokenized_from_file(in_path, out_path):
-    print in_path
-    annotated_text = corenlpy.AnnotatedText(open(in_path).read())
+    print(in_path)
+    with open(in_path) as f:
+        annotated_text = corenlpy.AnnotatedText(f.read())
     tokenized_sentences = [
         [t['word'].lower() for t in sentence['tokens']]
         for sentence in annotated_text.sentences
     ]
-    codecs.open(out_path, 'w', 'utf8').write('\n'.join([
-        ' '.join([t for t in sentence]) 
-        for sentence in tokenized_sentences
-    ]))
+    with codecs.open(out_path, 'w', 'utf8') as f:
+        f.write('\n'.join([
+            ' '.join([t for t in sentence]) 
+            for sentence in tokenized_sentences
+        ]))
 
 
 
@@ -55,8 +60,8 @@ def extract_tokenized_in_place(dirname, in_fname):
 def extract_all():
     for dirname, fname in dp.path_iteration.iter_gigaword_fnames():
         extract_tokenized_in_place(dirname, fname)
-        print 'processed', fname
-    print 'DONE!'
+        print('processed ' + fname)
+    print('DONE!')
 
 
 
@@ -70,7 +75,7 @@ def extract_one_sector(sector_name):
     gigaword-corenlp dataset, which is organized into 4096 such "sectors", each
     containing about 2000 individual tared archive files.
     """
-    print '\n\n\t--- STARTING EXTRACTION %s ---' % sector_name
+    print('\n\n\t--- STARTING EXTRACTION %s ---' % sector_name)
     # Ensure that a destination directory exists for this sector
     out_dir = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector_name)
     if not os.path.exists(out_dir):
@@ -80,7 +85,7 @@ def extract_one_sector(sector_name):
         sector_name)
     for dirname, fname in fname_iterator:
         in_path = dp.path_iteration.get_gigaword_path(dirname, fname)
-        out_path = dp.path_iteration.get_tokenized_path(dirname, fname)
+        out_path = dp.path_iteration.get_tokenized_path(dirname, fname[:-4])
         extract_tokenized_from_file(in_path, out_path)
 
 

@@ -24,12 +24,14 @@ class Dictionary(object):
         return self.token_ids[token]
 
     def save(self, path):
-        codecs.open(path, 'w', 'utf8').write('\n'.join(self.tokens))
+        with codecs.open(path, 'w', 'utf8') as f:
+            f.write('\n'.join(self.tokens))
 
     @staticmethod
     def load(path):
         dictionary = Dictionary()
-        dictionary.tokens = open(path).read().split('\n')
+        with open(path) as f:
+            dictionary.tokens = f.read().split('\n')
         dictionary.token_ids = {
             token: idx 
             for idx, token in enumerate(dictionary.tokens)

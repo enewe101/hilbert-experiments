@@ -1,6 +1,5 @@
-import CONSTANTS
-import extract_tokenized
-import extract_cooccurrence
-import path_iteration
-import dictionary
-import cooccurrence_statistics
+import data_preparation.CONSTANTS
+import data_preparation.extract_tokenized
+import data_preparation.extract_cooccurrence
+import data_preparation.path_iteration
+import data_preparation.dictionary
