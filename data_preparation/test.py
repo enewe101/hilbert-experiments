@@ -18,7 +18,7 @@ class TestDictionary(TestCase):
 
     def get_test_dictionary(self):
         tokens = dp.path_iteration.get_test_tokens()
-        return tokens, dp.dictionary.Dictionary(tokens)
+        return tokens, h.dictionary.Dictionary(tokens)
 
 
     def test_dictionary(self):
@@ -42,7 +42,7 @@ class TestDictionary(TestCase):
 
         tokens, dictionary = self.get_test_dictionary()
         dictionary.save(write_path)
-        loaded_dictionary = dp.dictionary.Dictionary.load(
+        loaded_dictionary = h.dictionary.Dictionary.load(
             write_path)
 
         self.assertEqual(loaded_dictionary.tokens, dictionary.tokens)
@@ -52,10 +52,10 @@ class TestDictionary(TestCase):
         os.remove(write_path)
 
 
-class TestCooccurrenceStatistics(TestCase):
+class TestCoocStats(TestCase):
 
     def get_test_cooccurrence_stats(self):
-        DICTIONARY = dp.dictionary.Dictionary([
+        DICTIONARY = h.dictionary.Dictionary([
             'banana', 'socks', 'car', 'field'])
         COUNTS = {
             (0,1):3, (1,0):3,
@@ -71,38 +71,38 @@ class TestCooccurrenceStatistics(TestCase):
     def test_invalid_arguments(self):
         dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
 
-        # Can make an empty CooccurrenceStatistics instance.
-        h.cooc_stats.CooccurrenceStatistics()
+        # Can make an empty CoocStats instance.
+        h.cooc_stats.CoocStats()
 
-        # Can make a non-empty CooccurrenceStatistics instance using counts and
+        # Can make a non-empty CoocStats instance using counts and
         # a matching dictionary.
-        h.cooc_stats.CooccurrenceStatistics(dictionary, counts)
+        h.cooc_stats.CoocStats(dictionary, counts)
 
-        # Must supply a dictionary to make a  non-empty CooccurrenceStatistics
+        # Must supply a dictionary to make a  non-empty CoocStats
         # instance when using counts.
         with self.assertRaises(ValueError):
-            h.cooc_stats.CooccurrenceStatistics(
+            h.cooc_stats.CoocStats(
                 counts=counts)
 
-        # Can make a non-empty CooccurrenceStatistics instance using Nxx and
+        # Can make a non-empty CoocStats instance using Nxx and
         # a matching dictionary.
         Nxx = sparse.coo_matrix(dij).tocsr()
-        h.cooc_stats.CooccurrenceStatistics(dictionary, counts)
+        h.cooc_stats.CoocStats(dictionary, counts)
 
-        # Must supply a dictionary to make a  non-empty CooccurrenceStatistics
+        # Must supply a dictionary to make a  non-empty CoocStats
         # instance when using Nxx.
         with self.assertRaises(ValueError):
-            h.cooc_stats.CooccurrenceStatistics(Nxx=Nxx)
+            h.cooc_stats.CoocStats(Nxx=Nxx)
 
         # Cannot provide both an Nxx and counts
         with self.assertRaises(ValueError):
-            h.cooc_stats.CooccurrenceStatistics(
+            h.cooc_stats.CoocStats(
                 dictionary, counts, Nxx=Nxx)
 
 
     def test_add_when_basis_is_counts(self):
         dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, counts, verbose=False)
         cooccurrence.add('banana', 'rice')
         self.assertEqual(cooccurrence.dictionary.get_id('rice'), 4)
@@ -119,7 +119,7 @@ class TestCooccurrenceStatistics(TestCase):
         Nx = np.array(np.sum(Nxx, axis=1)).reshape(-1)
 
         # Create a cooccurrence instance using counts
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, Nxx=Nxx, verbose=False)
 
         # Currently the cooccurrence instance has no internal counter for
@@ -158,7 +158,7 @@ class TestCooccurrenceStatistics(TestCase):
         Nx = np.array(np.sum(Nxx, axis=1)).reshape(-1)
 
         # Create a cooccurrence instance using Nxx
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, Nxx=Nxx, verbose=False)
         self.assertEqual(cooccurrence._counts, None)
 
@@ -172,7 +172,7 @@ class TestCooccurrenceStatistics(TestCase):
         dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
 
         # Create a cooccurrence instance using counts
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, counts, verbose=False)
 
         # The cooccurrence instance has no Nxx array, but it will be calculated
@@ -219,7 +219,7 @@ class TestCooccurrenceStatistics(TestCase):
 
 
     def test_sort(self):
-        unsorted_dictionary = dp.dictionary.Dictionary([
+        unsorted_dictionary = h.dictionary.Dictionary([
             'field', 'car', 'socks', 'banana'
         ])
         unsorted_counts = {
@@ -234,7 +234,7 @@ class TestCooccurrenceStatistics(TestCase):
             [0,1,0,3],
             [1,1,3,0],
         ])
-        sorted_dictionary = dp.dictionary.Dictionary([
+        sorted_dictionary = h.dictionary.Dictionary([
             'banana', 'socks', 'car', 'field'])
         sorted_counts = {
             (0,1):3, (1,0):3,
@@ -248,7 +248,7 @@ class TestCooccurrenceStatistics(TestCase):
             [1,1,0,0],
             [1,0,0,0]
         ])
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             unsorted_dictionary, unsorted_counts, verbose=False
         )
         self.assertTrue(np.allclose(cooccurrence.denseNxx, sorted_array))
@@ -267,12 +267,12 @@ class TestCooccurrenceStatistics(TestCase):
         dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
 
         # Create a cooccurrence instance using counts
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, counts, verbose=False)
 
         # Save it, then load it
         cooccurrence.save(write_path)
-        cooccurrence2 = h.cooc_stats.CooccurrenceStatistics.load(
+        cooccurrence2 = h.cooc_stats.CoocStats.load(
             write_path, verbose=False)
 
         self.assertEqual(
@@ -291,7 +291,7 @@ class TestCooccurrenceStatistics(TestCase):
 
     def test_density(self):
         dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, counts, verbose=False)
         self.assertEqual(cooccurrence.density(), 0.5)
         self.assertEqual(cooccurrence.density(2), 0.125)
@@ -299,7 +299,7 @@ class TestCooccurrenceStatistics(TestCase):
 
     def test_truncate(self):
         dictionary, counts, dij, array = self.get_test_cooccurrence_stats()
-        cooccurrence = h.cooc_stats.CooccurrenceStatistics(
+        cooccurrence = h.cooc_stats.CoocStats(
             dictionary, counts, verbose=False)
         cooccurrence.truncate(3)
         truncated_array = np.array([
@@ -422,7 +422,7 @@ class TestCooccurrenceExtraction(TestCase):
     def test_extract_cooccurrence_from_file(self):
 
         expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
-        cooccurrences = h.cooc_stats.CooccurrenceStatistics()
+        cooccurrences = h.cooc_stats.CoocStats()
 
         window = 2
         paths = dp.path_iteration.iter_test_paths()
@@ -464,7 +464,7 @@ class TestCooccurrenceExtraction(TestCase):
 
         # Try loading from what was written, it should be the same as what
         # was returned.
-        cooccurrences2 = h.cooc_stats.CooccurrenceStatistics.load(
+        cooccurrences2 = h.cooc_stats.CoocStats.load(
             write_path, verbose=False)
         self.assertEqual(cooccurrences.counts, cooccurrences2.counts)
         self.assertTrue(np.allclose(

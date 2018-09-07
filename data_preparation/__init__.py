@@ -2,4 +2,3 @@ import data_preparation.CONSTANTS
 import data_preparation.extract_tokenized
 import data_preparation.extract_cooccurrence
 import data_preparation.path_iteration
-import data_preparation.dictionary

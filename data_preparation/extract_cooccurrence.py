@@ -23,7 +23,7 @@ def extract_cooccurrence_from_file(path, window, cooccurrences):
 
 
 def extract_all(in_paths, window, limit=None, verbose=True):
-    cooccurrences = h.cooc_stats.CooccurrenceStatistics(verbose=verbose)
+    cooccurrences = h.cooc_stats.CoocStats(verbose=verbose)
     if not isinstance(in_paths, list):
         in_paths = list(in_paths)
     if limit is None:
