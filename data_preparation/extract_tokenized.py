@@ -9,14 +9,6 @@ import data_preparation as dp
 
 
 
-def read_tokens(paths):
-    tokens = []
-    for path in paths:
-        with open(path) as f:
-            tokens.extend([token for token in f.read().split()])
-    return tokens
-
-
 
 def extract_tokenized_from_file(in_path, out_path):
     print(in_path)
@@ -31,6 +23,14 @@ def extract_tokenized_from_file(in_path, out_path):
             ' '.join([t for t in sentence]) 
             for sentence in tokenized_sentences
         ]))
+
+
+#def read_tokens(paths):
+#    tokens = []
+#    for path in paths:
+#        with open(path) as f:
+#            tokens.extend([token for token in f.read().split()])
+#    return tokens
 
 
 

@@ -9,3 +9,4 @@ CONSTANTS.py
 env
 env3
 test-data
+.nfs*

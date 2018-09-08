@@ -4,6 +4,20 @@ import re
 
 
 
+
+
+def iter_test_fnames():
+    for path in os.listdir(dp.CONSTANTS.TEST_DOCS_DIR):
+        if not skip_file(path):
+            yield os.path.basename(path)
+
+def iter_test_paths():
+    for fname in iter_test_fnames():
+        yield get_test_path(fname)
+
+
+
+
 def get_gigaword_path(dirname, fname):
     return os.path.join(
         dp.CONSTANTS.LOCAL_GIGAWORD_DIR, dirname, 'CoreNLP', fname)
@@ -31,20 +45,6 @@ def skip_file(fname):
     if fname.endswith('.swp') or fname.endswith('.swo'):
         return True
     return False
-
-
-def iter_test_paths():
-    for fname in iter_test_fnames():
-        yield get_test_path(fname)
-
-def iter_test_fnames():
-    for path in os.listdir(dp.CONSTANTS.TEST_DOCS_DIR):
-        if not skip_file(path):
-            yield os.path.basename(path)
-
-def get_test_tokens():
-    paths = dp.path_iteration.iter_test_paths()
-    return dp.extract_tokenized.read_tokens(paths)
 
 
 def iter_gigaword_fnames():
