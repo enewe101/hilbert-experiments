@@ -29,14 +29,14 @@ setup(
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.6',
     ],
     keywords= (
         'word embeddings, NLP, word2vec, GloVe, FastText, skip-gram '
         'with negative sampling' 
     ),
-    packages=['data_preparation', 'embedding_creation'],
+    packages=['data_preparation', 'embedding_creation', 'evaluation'],
 	#indlude_package_data=True,
 	package_data={'': ['README.md']},
-	install_requires=['corenlpy', 'scipy', 'hilbert']
+	install_requires=['corenlpy', 'scipy', 'hilbert', 'nltk']
 )
