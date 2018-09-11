@@ -12,3 +12,4 @@ test-data
 .nfs*
 evaluation/datasets
 
+tmp/
