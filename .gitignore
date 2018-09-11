@@ -10,5 +10,5 @@ env
 env3
 test-data
 .nfs*
-evaluation/external_datasets
+evaluation/datasets
 
