@@ -1,10 +1,9 @@
 ### Assumes you have MXNET and GLUONNLP installed.
 # alternatively, just download the actual datasets from my website with curl (in bash script)
-
+import re
 import gluonnlp as nlp
 import gluonnlp.data as d
-
-HILBERT_DATASET_DIR = 'datasets/'
+import multiprocessing as mp
 
 datasets = [
     ('WordSim353_relatedness', lambda: d.WordSim353(segment='relatedness')), 
@@ -40,10 +39,57 @@ for name, ds_const in datasets:
                 assert '\n' not in val
 
     # serialize to our directory
-    with open('{}{}.csv'.format(HILBERT_DATASET_DIR, name), 'w') as f:
+    with open('unsup_datasets/{}.csv'.format(name.lower()), 'w') as f:
         f.write(','.join(header))
         f.write('\n')
         for sample in ds:
             f.write(','.join(map(str, sample)))
             f.write('\n')
+
+
+
+####### will also be doing the same with the IMDB data
+datasets = [
+    ('imdb_train', d.IMDB(segment='train')),
+    ('imdb_test', d.IMDB(segment='test'))
+]
+
+# tokenize and set max length of 500
+tokenizer = d.SpacyTokenizer('en')
+length_clip = d.ClipSequence(500)
+
+# keep some of the punct, periods and exclamation points. remove all else
+REPLACE_NO_SPACE = re.compile("(\*)|(\;)|(\:)||(\')||(\,)|(\")|(\()|(\))|(\[)|(\])|(\t)|(\n)")
+
+# remove the stupid html tags that snuck into the dataset
+REPLACE_WITH_SPACE = re.compile("(<br\s*/><br\s*/>)|(\-)|(\/)")
+
+def preprocess(sample):
+    st, label = sample
+    st = REPLACE_NO_SPACE.sub("", st.lower())
+    st = REPLACE_WITH_SPACE.sub(" ", st)
+    st = re.sub(' +', ' ', st) # replace all extra spaces with just 1
+    label = 'pos' if label > 5 else 'neg'
+    return length_clip(tokenizer(st)), label
+
+
+# iterate and multiprocess for speeeed
+for name, data in datasets:
+    with mp.Pool() as pool:
+        dataset = list(pool.map(preprocess, data))
+    print('{} has {} samples'.format(name, len(dataset)))
+    print('\tExample: {}'.format(' '.join(dataset[150][0])))
+    print('\tExample: {}'.format(' '.join(dataset[500][0])))
+    print()
+
+    with open('sup_datasets/{}.csv'.format(name), 'w') as f:
+        f.write('tokenized_text,sentiment\n')
+        for sample, label in dataset:
+            s = '{},{}\n'.format(' '.join(sample), label)
+            assert s.count(',') == 1
+            f.write(s)
+
+    
+
+
 
