@@ -11,5 +11,7 @@ env3
 test-data
 .nfs*
 evaluation/datasets
-
+evaluation/tmp/
+evaluation/aclImdb*
+evaluation/.zips/aclImdb*
 tmp/

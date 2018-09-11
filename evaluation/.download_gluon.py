@@ -40,7 +40,7 @@ for name, ds_const in datasets:
                 assert '\n' not in val
 
     # serialize to our directory
-    with open('{}{}.txt'.format(HILBERT_DATASET_DIR, name), 'w') as f:
+    with open('{}{}.csv'.format(HILBERT_DATASET_DIR, name), 'w') as f:
         f.write(','.join(header))
         f.write('\n')
         for sample in ds:
