@@ -17,3 +17,4 @@ evaluation/.zips/aclImdb*
 tmp/
 evaluation/sup_datasets
 evaluation/unsup_datasets
+evaluation/np
