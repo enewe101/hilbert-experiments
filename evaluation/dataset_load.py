@@ -64,6 +64,9 @@ class HilbertDataset(object):
     def items(self):
         return self._all.items()
 
+    def values(self):
+        return self._all.values()
+
 
     def split_train_test(self, proportion=0.3):
         assert len(self._train) == len(self._test) == 0
@@ -148,7 +151,9 @@ def load_similarity():
             ds = []
             for line in f.readlines()[1:]: # skip header
                 strings = line.split(',')
-                ds.append((*strings[:2], float(strings[2])))
+                ds.append((strings[0].lower(), 
+                           strings[1].lower(), 
+                           float(strings[2]),))
             datasets.add_full(ds, fname.replace('.csv', '')) 
     return datasets
 
@@ -162,7 +167,7 @@ def load_analogies():
     datasets = HilbertDataset('analogy', True)
     for fname in filter(lambda x: 'analog' in x.lower(), listdir(UNSUP_DIR)):
         with open('{}{}'.format(UNSUP_DIR, fname), 'r') as f:
-            ds = [tuple(s.rstrip('\n') for s in l.split(',')) 
+            ds = [tuple(s.rstrip('\n').lower() for s in l.split(',')) 
                   for l in f.readlines()[1:]]
             datasets.add_full(ds, fname.replace('.csv', '')) 
     return datasets
@@ -175,7 +180,7 @@ def load_pos_tagging():
     """
     dataset = HilbertDataset('pos_brown', False)
     sents_tags = [[(w.lower(), t) for w, t in s]
-                for s in brown.tagged_sents(tagset='universal')]
+                  for s in brown.tagged_sents(tagset='universal')]
     dataset.add_full(sents_tags)
     return dataset
 
