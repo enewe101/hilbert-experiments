@@ -62,39 +62,36 @@ def analogy_exp(embs, hdataset):
 
         for w1, w2, w3, w4 in samples:
             bar.next()
-            id1 = embs.dictionary.get_id(w1)
-            id2 = embs.dictionary.get_id(w2)
-            id3 = embs.dictionary.get_id(w3)
+            e1 = embs.get_vec(w1, oov_policy='unk')
+            e2 = embs.get_vec(w2, oov_policy='unk')
+            e3 = embs.get_vec(w3, oov_policy='unk')
 
-            # w1 is to w2 as w3 is to _argmax_
-            # have to get two results, 3cosadd and 3cosmul
-            best_add, best_mul = -np.inf, -np.inf
-            best_w_add, best_w_mul = '', ''
+            # get cos sims for each of them with the dataset
+            ## TODO: combine e1, e2, e3 together and do one mm (maybe it would be slightly faster?)
+            sim1_all = embs.V.mm(e1.reshape(-1, 1))
+            sim2_all = embs.V.mm(e2.reshape(-1, 1))
+            sim3_all = embs.V.mm(e3.reshape(-1, 1))
+            cos_add = sim2_all + sim3_all - sim1_all
+            cos_mul = sim2_all * sim3_all / (sim1_all + 0.0001) # add epsilon to avoid divide by 0
 
-            for i in range(len(embs.dictionary)):
-                if i in (id1, id2, id3): continue
-                sim1w = embs.V[i].dot(embs.V[id1])
-                sim2w = embs.V[i].dot(embs.V[id2])
-                sim3w = embs.V[i].dot(embs.V[id3])
+            # make sure we don't get the vecs themselves
+            for wi in (w1, w2, w3):
+                cos_add[embs.dictionary.get_id(wi)] = -np.inf
+                cos_mul[embs.dictionary.get_id(wi)] = -np.inf
 
-                cosadd = sim2w + sim3w - sim1w 
-                cosmul = sim2w * sim3w / sim1w
+            # get the best with argmax
+            best_w_add = embs.dictionary.get_token(cos_add.argmax())
+            best_w_mul = embs.dictionary.get_token(cos_mul.argmax())
 
-                if cosadd > best_add:
-                    best_add = cosadd
-                    best_w_add = embs.dictionary.get_token(i)
-
-                if cosmul > best_mul:
-                    best_mul = cosmul
-                    best_w_mul = embs.dictionary.get_token(i)
-
+            # count up for final accuracy
             correct_cosadd += 1 if w4 == best_w_add else 0
             correct_cosmul += 1 if w4 == best_w_mul else 0
 
         # save the accuracies
         results[dname] = {
             '3cosadd': correct_cosadd / len(samples),
-            '3cosmul': correct_cosmul / len(samples) }
+            '3cosmul': correct_cosmul / len(samples), 
+        }
 
     bar.finish()
     return results
