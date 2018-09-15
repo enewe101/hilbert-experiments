@@ -5,7 +5,7 @@ import sklearn_crfsuite as skcrf
 from nltk.corpus import stopwords
 from dataset_load import HilbertDataset
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score, accuracy_score, classification_report
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
 
@@ -17,6 +17,10 @@ def cossim(v1, v2):
 
 
 # global constants
+stopwords = set(stopwords.words('english'))
+SENTI_STOPS = stopwords.copy()
+SENTI_STOPS.difference_update({'no', 'not'})
+SENTI_STOPS.update({'.'})
 EMB_DIM = 300
 
 
@@ -35,8 +39,8 @@ def similarity_exp(embs, hdataset):
             bar.next()
 
             gold.append(gold_score)
-            e1 = embs.get_vec(w1, oov_policy='unk').numpy()
-            e2 = embs.get_vec(w2, oov_policy='unk').numpy()
+            e1 = embs.get_vec(w1, oov_policy='unk')
+            e2 = embs.get_vec(w2, oov_policy='unk')
             similarities.append(cossim(e1, e2))
         
         results[dname] = spearmanr(gold, similarities)[0]
@@ -106,13 +110,76 @@ def chunking_exp(embs, hdataset):
 
 
 def sentiment_exp(embs, hdataset):
-    pass
+    tr_x, tr_y = hdataset.get_x_y('train')
+    te_x, te_y = hdataset.get_x_y('test')
+    X_feats = []
+    
+    # make features be the mean embedding vector, simple.
+    bar = IncrementalBar('Extracting features', max=len(tr_x) + len(te_x))
+    for sample in tr_x + te_x:
+        features = np.zeros(EMB_DIM)
+        count = 0
+        for token in filter(lambda t: t not in SENTI_STOPS, sample):
+            try:
+                features += embs[token]
+                count += 1
+            except KeyError:
+                continue
+        features = embs.unk if count == 0 else features / count
+        X_feats.append(features)
+        bar.next()
+    bar.finish()
+
+    # train log reg on the samples
+    print('Fitting model...')
+    X_feats = np.array(X_feats)
+    model = LogisticRegression()
+    model.fit(X_feats[ :len(tr_x)], tr_y)
+
+    # predict, return results dict
+    y_pred = model.predict( X_feats[len(tr_x): ] )
+    return {
+        'accuracy': accuracy_score(te_y, y_pred),
+        'report': classification_report(te_y, y_pred),
+    }
 
 
 def news_exp(embs, hdataset):
-    pass
+    tr_x, tr_y = hdataset.get_x_y('train')
+    te_x, te_y = hdataset.get_x_y('test')
+    X_feats = []
+    
+    # make features be the mean embedding vector, simple.
+    bar = IncrementalBar('Extracting features', max=len(tr_x) + len(te_x))
+    for sample in tr_x + te_x:
+        features = np.zeros(EMB_DIM)
+        count = 0
+        for token in filter(lambda t: t not in stopwords, sample):
+            try:
+                features += embs[token]
+                count += 1
+            except KeyError:
+                continue
+        features = embs.unk if count == 0 else features / count
+        X_feats.append(features)
+        bar.next()
+    bar.finish()
+
+    # train log reg on the samples
+    print('Fitting model...')
+    X_feats = np.array(X_feats) 
+    model = LogisticRegression()
+    model.fit(X_feats[ :len(tr_x)], tr_y)
+
+    # predict, return results dict
+    y_pred = model.predict( X_feats[len(tr_x): ] )
+    return {
+        'accuracy': accuracy_score(te_y, y_pred),
+        'report': classification_report(te_y, y_pred),
+    }
 
 
+### primary running code below ###
 NAMES_TO_FUN = {
     'similarity': similarity_exp,
     'analogy': analogy_exp,
@@ -128,7 +195,9 @@ def run_experiments(embs, datasets):
     all_results = {}
     for dname, hilbertd in datasets.items():
         exp = NAMES_TO_FUN[dname]
+        if dname == 'analogy': continue
         all_results[dname] = exp(embs, hilbertd)
+        print(all_results[dname])
     return all_results
 
 
@@ -137,10 +206,23 @@ def load_embeddings(path, vocab):
     if path == 'RANDOM':
         words = [t[0] for t in vocab if t[1] > 1] # don't get single occurences
         words_d = hilbert.dictionary.Dictionary(words)
-        return hilbert.embeddings.random(d=EMB_DIM, vocab=len(words), dictionary=words_d, device='cpu')
+        return hilbert.embeddings.random(d=EMB_DIM, 
+                distribution='uniform',
+                scale=0.5,
+                vocab=len(words), 
+                dictionary=words_d, 
+                implementation='numpy',
+                device='cpu',
+        )
     else:
-        raise NotImplementedError
-
+        e = hilbert.embeddings.Embeddings.load(
+            path,
+            device='cpu',
+            implementation='numpy',
+        )
+        if e.V.shape[0] == 300:
+            e.V = e.V.transpose(1, 0)
+        return e
 
 def get_all_words(list_of_hdatasets):
     vocab = {}
