@@ -89,12 +89,16 @@ def iter_tokenized_fnames_in_sector(sector):
         if not skip_file(fname):
             yield sector, fname
 
-def iter_tokenized_paths_in_sector(sector):
+def iter_tokenized_paths_in_sector(sector, limit=None):
     dirpath = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector)
+    if limit is not None:
+        print('Warning: limiting files iterated per sector')
     if not os.path.exists(dirpath):
         print('WARNING: sector does not exist (%s).' % dirpath)
         return
-    for fname in os.listdir(dirpath):
+    for i, fname in enumerate(os.listdir(dirpath)):
+        if limit is not None and i >= limit:
+            break
         if not skip_file(fname):
             yield get_tokenized_path(sector, fname)
 

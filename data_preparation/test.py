@@ -123,7 +123,7 @@ class TestCooccurrenceExtraction(TestCase):
         window = 2
         paths = dp.path_iteration.iter_test_paths()
         for path in paths:
-            dp.extract_cooccurrence.extract_cooccurrence_from_file(
+            dp.cooccurrence_extraction.extract_cooccurrence_from_file(
                 path, window, cooccurrences)
 
         for (token1, token2), expected_count in expected_counts.items():
@@ -149,7 +149,7 @@ class TestCooccurrenceExtraction(TestCase):
         if os.path.exists(write_path):
             shutil.rmtree(write_path)
 
-        cooccurrences = dp.extract_cooccurrence.extract_and_write_all(
+        cooccurrences = dp.cooccurrence_extraction.extract_and_write_all(
             paths, write_path, window, verbose=False)
 
         for (token1, token2), count in expected_counts.items():

@@ -1,4 +1,6 @@
 import data_preparation.CONSTANTS
 import data_preparation.extract_tokenized
-import data_preparation.extract_cooccurrence
+import data_preparation.cooccurrence_extraction
 import data_preparation.path_iteration
+
+from data_preparation.cooccurrence_extraction import read_stats
