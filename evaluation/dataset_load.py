@@ -178,7 +178,7 @@ def load_pos_tagging():
     Returns a full list representing the dataset.
         Each item is a sentence built of (word, tag) tuples for each token.
     """
-    dataset = HilbertDataset('pos_brown', False)
+    dataset = HilbertDataset('pos', False)
     sents_tags = [[(w.lower(), t) for w, t in s]
                   for s in brown.tagged_sents(tagset='universal')]
     dataset.add_full(sents_tags)
@@ -194,7 +194,7 @@ def load_chunking():
     May want to look into using our model to build the POS tags first
         and then doing the chunking, a more realistic setting (perhaps).
     """
-    dataset = HilbertDataset('conll2000_chunking', is_unsupervised=False)
+    dataset = HilbertDataset('chunking', is_unsupervised=False)
     for dname in ('train', 'test'):
         sents = conll2000.chunked_sents('{}.txt'.format(dname), chunk_types=['NP'])
         data = [ [((w.lower(), t), c) for w, t, c in nltk.chunk.tree2conlltags(sent)] 
@@ -204,7 +204,7 @@ def load_chunking():
 
 
 def load_sentiment():
-    dataset = HilbertDataset('imdb_sentiment', is_unsupervised=False)
+    dataset = HilbertDataset('sentiment', is_unsupervised=False)
     for fname in filter(lambda x: 'imdb' in x.lower(), listdir(SUP_DIR)):
         ds = []
         with open('{}{}'.format(SUP_DIR, fname), 'r') as f:
@@ -219,7 +219,7 @@ def load_sentiment():
 
 
 def load_news_classification():
-    dataset = HilbertDataset('agnews', is_unsupervised=False)
+    dataset = HilbertDataset('news', is_unsupervised=False)
     ds = []
     with open('{}agnews_full.csv'.format(SUP_DIR), 'r') as f:
         for line in f.readlines()[1:]:

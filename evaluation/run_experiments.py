@@ -2,6 +2,7 @@ import argparse
 import hilbert
 import numpy as np
 import sklearn_crfsuite as skcrf
+from sklearn_crfsuite import metrics
 from nltk.corpus import stopwords
 from dataset_load import HilbertDataset
 from sklearn.linear_model import LogisticRegression
@@ -101,8 +102,79 @@ def analogy_exp(embs, hdataset):
     return results
 
 
-def pos_tag_exp(embs, hdataset):
-    pass
+# feature extraction function for CRFs
+# need feature extraction function to apply to each sentence
+# this dictionary based method is somewhat bad, but it is the way their API works
+def _crf_features(idx, tok_embs, only_emb=True):
+    # start with basic features
+    f = {} if only_emb else {
+        'is_first': idx == 0,
+        'is_last': idx == len(tok_embs) - 1,
+    } 
+    
+    # now we add word embeddings as features
+    emb = tok_embs[idx]
+    f.update({'e{}'.format(i): emb[i] 
+              for i in range(len(emb))})
+    
+    if only_emb:
+        return f
+    
+    # add previous and last embeddings as features, if applicable
+    surr_embs = []
+    if idx > 0:
+        surr_embs.append(('prev_e', tok_embs[idx-1]))
+    if idx < len(tok_embs) - 1:
+        surr_embs.append(('post_e', tok_embs[idx+1]))
+    
+    for prefix, e in surr_embs:
+        f.update({'{}{}'.format(prefix, i): e[i] 
+                  for i in range(len(e))})
+    
+    return f
+
+
+
+def pos_tag_exp(embs, hdataset, safe=True):
+   
+    # get the training data
+    tr_x, tr_y = hdataset.get_x_y('train')
+    te_x, te_y = hdataset.get_x_y('test')
+
+    # x is list of sentences, sentence is list of tokens
+    # y is list of pos-tag lists for each token
+
+    # now we iterate over everything and extract features
+    bar = IncrementalBar('extracting features', max=len(tr_x)+len(te_x))
+    X = []
+    for sent_tokens in tr_x + te_x:
+        sent_embeddings = [embs.get_vec(t, oov_policy='unk') 
+                           for t in sent_tokens]
+        X.append([_crf_features(idx, sent_embeddings)
+                  for idx in range(len(sent_embeddings))])
+        bar.next()
+    bar.finish()
+
+    # set the train and test sets with slicing
+    X_train = X[:len(tr_x)]
+    X_test = X[len(tr_x):]
+    
+    # basic safety checking
+    if safe:
+        for _x, _y in [(X_train, tr_y), (X_test, te_y)]:
+            assert len(_x) == len(_y)
+            for i, sent_feats in enumerate(_x):
+                assert len(sent_feats) == len(_y[i])
+
+    # now build the model
+    print('Fitting crf...')
+    model = skcrf.CRF(verbose=True)
+    model.fit(X_train, tr_y)
+    y_pred = model.predict(X_test)
+
+    # accuracy
+    acc = metrics.flat_accuracy_score(te_y, y_pred)
+    return {'flat_acc': acc}
 
 
 def chunking_exp(embs, hdataset):
@@ -183,21 +255,21 @@ def news_exp(embs, hdataset):
 NAMES_TO_FUN = {
     'similarity': similarity_exp,
     'analogy': analogy_exp,
-    'pos_brown': pos_tag_exp,
-    'conll2000_chunking': chunking_exp,
-    'imdb_sentiment': sentiment_exp,
-    'agnews': news_exp,
+    'pos': pos_tag_exp,
+    'chunking': chunking_exp,
+    'sentiment': sentiment_exp,
+    'news': news_exp,
 }
 
 
 # main function
-def run_experiments(embs, datasets):
+def run_experiments(embs, datasets, option='all'):
     all_results = {}
     for dname, hilbertd in datasets.items():
-        exp = NAMES_TO_FUN[dname]
-        if dname == 'analogy': continue
-        all_results[dname] = exp(embs, hilbertd)
-        print(all_results[dname])
+        if option == 'all' or dname == option:
+            exp = NAMES_TO_FUN[dname]
+            all_results[dname] = exp(embs, hilbertd)
+            print(all_results[dname])
     return all_results
 
 
@@ -211,17 +283,16 @@ def load_embeddings(path, vocab):
                 scale=0.5,
                 vocab=len(words), 
                 dictionary=words_d, 
-                implementation='numpy',
                 device='cpu',
         )
     else:
         e = hilbert.embeddings.Embeddings.load(
             path,
             device='cpu',
-            implementation='numpy',
         )
-        if e.V.shape[0] == 300:
-            e.V = e.V.transpose(1, 0)
+        if len(e.V) == 300:
+            e.V = e.V.transpose(0, 1)
+        e.V = e.V.numpy()
         return e
 
 def get_all_words(list_of_hdatasets):
@@ -240,7 +311,11 @@ if __name__ == '__main__':
         help='path to the embeddings we want to process,'
              'default is just using a constant random init.'
     )
-    #parser.add_argument('')
+    parser.add_argument('--exp', type=str, default='all',
+        choices=['all', 'sentiment', 'pos', 'similarity', 
+                 'analogy', 'chunking', 'news'],
+        help='specific experiment to run, use for debugging'
+    )
     args = parser.parse_args() 
 
     # load up the datasets and get the vocab we will need.
@@ -252,7 +327,7 @@ if __name__ == '__main__':
     m_emb = load_embeddings(args.emb_path, m_vocab_tups)
 
     # run the experiments!
-    exps = run_experiments(m_emb, m_datasets)
+    exps = run_experiments(m_emb, m_datasets, option=args.exp)
     for m_name, m_res in exps.items():
         if m_res is None: continue
         print('Results for {}:'.format(m_name))
