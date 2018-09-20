@@ -2,11 +2,19 @@ import nltk
 import numpy as np
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
-from nltk.corpus import brown, conll2000
+from nltk.corpus import brown, conll2000, stopwords
 from os import listdir
 
 UNSUP_DIR = 'unsup_datasets/'
 SUP_DIR = 'sup_datasets/'
+STOPS = set(stopwords.words('english'))
+
+# filter helper function
+def filter_words(tok_list, filter_stops):
+    if filter_stops:
+        return [t for t in tok_list if not t in STOPS]
+    return tok_list
+
 
 
 class HilbertDataset(object):
@@ -21,7 +29,8 @@ class HilbertDataset(object):
         self.is_unsupervised = is_unsupervised
         self._train = []
         self._test = []
-        self._all = {} 
+        self._all = {}
+        self.labels_to_idx = {}
 
 
     def add_full(self, data_list, ds_name=''):
@@ -64,6 +73,7 @@ class HilbertDataset(object):
     def items(self):
         return self._all.items()
 
+
     def values(self):
         return self._all.values()
 
@@ -77,23 +87,70 @@ class HilbertDataset(object):
                                                    random_state=1917)
 
 
-    def get_x_y(self, ds_set):
+    def get_x_y(self, ds_set, ds_dict=None, as_indicies=False, filter_stopwords=True):
         self.sup_check(ds_set)
         _x = []
         _y = []
+
+        # storing the unique labels, if desired later
+        unique_labs = set()
+
+        # iterate over the tuples in the dataset
         for item in self._ds_set(ds_set):
-            # if that, then this is sequence classification
+
+            # if this is the case, then this is sequence classification
             if type(item[0]) == list and type(item[1]) == str: 
                 sample, label = item
-                _x.append(sample)
+                _x.append(filter_words(sample, filter_stopwords))
                 _y.append(label)
-            else: # then this is token-level classification with a CRF
+
+                # updating the unique labels for seq classificatoin
+                if len(self.labels_to_idx) == 0: unique_labs.add(label)
+
+            # otherwise, this is token-level seq-to-seq classification
+            else:
                 labels = [t[-1] for t in item]
                 token_tups = [t[:-1][0] for t in item]
                 _x.append(token_tups) # for POS tagging this will just be tokens
                                       # but for chunking it will be (token, tag)
                 _y.append(labels)
-        return _x, _y
+
+                # updating the unique labels for seq-to-seq
+                if len(self.labels_to_idx) == 0: unique_labs.update(set(labels))
+
+        # set our label-to-idx storage if it has not been set before
+        if len(self.labels_to_idx) == 0:
+            self.labels_to_idx = {l: i for i, l in enumerate(unique_labs)}
+
+        # return a list of indicies of labels, rather than the string labels themselves
+        if as_indicies:
+            toks_idx = []
+            labs_idx = []
+            for sentence, yval in zip(_x, _y):
+
+                # get the idxs for the tokens from our dict
+                toks_idx.append([])
+                for t in sentence:
+
+                    # TODO: fix this to account for the token tups for chunking
+                    try:
+                        t_id = ds_dict.get_id(t)
+                    except KeyError:
+                        t_id = len(ds_dict) # unk id
+                    toks_idx[-1].append(t_id)
+
+                # set the y labels
+                if type(yval) == list:
+                    labs_idx.append([self.labels_to_idx[lab] for lab in yval])
+                else:
+                    labs_idx.append(self.labels_to_idx[yval])
+
+            # return all the indexed boys
+            return toks_idx, labs_idx
+
+        # otherwise, return the string labels
+        else:
+            return _x, _y
 
 
     def get_stats(self, ds_set):
@@ -108,7 +165,8 @@ class HilbertDataset(object):
                 counts[item] += 1
             else:
                 print(item)
-                raise NotImplementedException
+                raise NotImplementedError('Improper dataset form!')
+
         total = sum(counts.values())
         print('\nStats for dataset {} ({}):'.format(self.name, ds_set))
         for label, count in sorted(counts.items(), key=lambda t: t[1]):
@@ -234,12 +292,12 @@ def load_news_classification():
 
 def load_all():
     all_hilbs = [
-            load_similarity(), 
-            load_analogies(),
-            load_pos_tagging(),
-            load_chunking(),
-            load_sentiment(),
-            load_news_classification(),
+        load_similarity(),
+        load_analogies(),
+        load_pos_tagging(),
+        load_chunking(),
+        load_sentiment(),
+        load_news_classification(),
     ]
     for d in all_hilbs:
         try:
