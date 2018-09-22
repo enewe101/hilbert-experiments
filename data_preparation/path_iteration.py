@@ -1,13 +1,12 @@
 import os
-import data_preparation as dp
 import re
 
-
-
+import shared
+import data_preparation as dp
 
 
 def iter_test_fnames():
-    for path in os.listdir(dp.CONSTANTS.TEST_DOCS_DIR):
+    for path in os.listdir(shared.CONSTANTS.TEST_DOCS_DIR):
         if not skip_file(path):
             yield os.path.basename(path)
 
@@ -20,23 +19,23 @@ def iter_test_paths():
 
 def get_gigaword_path(dirname, fname):
     return os.path.join(
-        dp.CONSTANTS.LOCAL_GIGAWORD_DIR, dirname, 'CoreNLP', fname)
+        shared.CONSTANTS.LOCAL_GIGAWORD_DIR, dirname, 'CoreNLP', fname)
 
 
 def get_tokenized_path(dirname, fname):
-    return os.path.join(dp.CONSTANTS.TOKENIZED_DIR, dirname, fname)
+    return os.path.join(shared.CONSTANTS.TOKENIZED_DIR, dirname, fname)
 
 
 def get_test_path(fname):
-    return os.path.join(dp.CONSTANTS.TEST_DOCS_DIR, fname)
+    return os.path.join(shared.CONSTANTS.TEST_DOCS_DIR, fname)
 
 
 def get_cooccurrence_path(fname):
-    return os.path.join(dp.CONSTANTS.COOCCURRENCE_DIR, fname)
+    return os.path.join(shared.CONSTANTS.COOCCURRENCE_DIR, fname)
 
 
 def get_test_write_path(fname):
-    return os.path.join(dp.CONSTANTS.TEST_WRITE_DIR, fname)
+    return os.path.join(shared.CONSTANTS.TEST_WRITE_DIR, fname)
 
 
 def skip_file(fname):
@@ -51,9 +50,9 @@ def iter_gigaword_fnames():
     """
     Iterates (sector_name, fname) pairs for all of gigaword (all sectors):
     """
-    for sector_name in os.listdir(dp.CONSTANTS.LOCAL_GIGAWORD_DIR):
+    for sector_name in os.listdir(shared.CONSTANTS.LOCAL_GIGAWORD_DIR):
         gigaword_dir = os.path.join(
-            dp.CONSTANTS.LOCAL_GIGAWORD_DIR, sector_name, 'CoreNLP')
+            shared.CONSTANTS.LOCAL_GIGAWORD_DIR, sector_name, 'CoreNLP')
         for sector_name, fname in iter_gigaword_fnames_in_sector(sector_name):
             yield sector_name, fname
 
@@ -63,7 +62,7 @@ def iter_gigaword_fnames_in_sector(sector_name):
     Iterates (sector_name, fname) pairs for one sector.
     """
     sector_dir = os.path.join(
-        dp.CONSTANTS.LOCAL_GIGAWORD_DIR, sector_name, 'CoreNLP')
+        shared.CONSTANTS.LOCAL_GIGAWORD_DIR, sector_name, 'CoreNLP')
     for fname in os.listdir(sector_dir):
         if not skip_file(fname):
             yield sector_name, fname
@@ -84,13 +83,13 @@ def iter_gigaword_paths():
 
 
 def iter_tokenized_fnames_in_sector(sector):
-    dirpath = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector)
+    dirpath = os.path.join(shared.CONSTANTS.TOKENIZED_DIR, sector)
     for fname in os.listdir(dirpath):
         if not skip_file(fname):
             yield sector, fname
 
 def iter_tokenized_paths_in_sector(sector, limit=None):
-    dirpath = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector)
+    dirpath = os.path.join(shared.CONSTANTS.TOKENIZED_DIR, sector)
     if limit is not None:
         print('Warning: limiting files iterated per sector')
     if not os.path.exists(dirpath):
@@ -108,9 +107,9 @@ def iter_tokenized_paths():
         yield get_tokenized_path(dirname, fname)
 
 def iter_tokenized_fnames():
-    for dirname in os.listdir(dp.CONSTANTS.TOKENIZED_DIR):
+    for dirname in os.listdir(shared.CONSTANTS.TOKENIZED_DIR):
         tokenized_path = os.path.join(
-            dp.CONSTANTS.TOKENIZED_DIR, dirname)
+            shared.CONSTANTS.TOKENIZED_DIR, dirname)
         for fname in os.listdir(tokenized_path):
             if not skip_file(fname):
                 yield dirname, fname

@@ -5,6 +5,7 @@ import codecs
 
 import corenlpy
 
+import shared
 import data_preparation as dp
 
 
@@ -77,7 +78,7 @@ def extract_one_sector(sector_name):
     """
     print('\n\n\t--- STARTING EXTRACTION %s ---' % sector_name)
     # Ensure that a destination directory exists for this sector
-    out_dir = os.path.join(dp.CONSTANTS.TOKENIZED_DIR, sector_name)
+    out_dir = os.path.join(shared.CONSTANTS.TOKENIZED_DIR, sector_name)
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 

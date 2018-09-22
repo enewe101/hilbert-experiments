@@ -6,8 +6,9 @@ import numpy as np
 from scipy import sparse
 from unittest import main, TestCase
 
-import data_preparation as dp
+import shared
 import hilbert as h
+import data_preparation as dp
 
 import warnings
 import logging
@@ -20,7 +21,7 @@ logging.captureWarnings(True)
 class TestPathIteration(TestCase):
 
     def test_iter_gigaword_fnames_in_sector(self):
-        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fname_path = os.path.join(shared.CONSTANTS.TEST_DATA_DIR, '000.ls')
         with open(expected_fname_path) as f:
             expected_fnames = f.read().split()
         expected_fnames = { ('000', fname) for fname in expected_fnames }
@@ -30,7 +31,7 @@ class TestPathIteration(TestCase):
 
 
     def test_iter_gigaword_paths_in_sector(self):
-        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fname_path = os.path.join(shared.CONSTANTS.TEST_DATA_DIR, '000.ls')
         with open(expected_fname_path) as f:
             expected_fnames = f.read().split()
         expected_paths = {
@@ -44,20 +45,20 @@ class TestPathIteration(TestCase):
 
     def test_get_gigaword_path(self):
         expected_path = os.path.join(
-            dp.CONSTANTS.LOCAL_GIGAWORD_DIR, '000', 'CoreNLP', 'xyz.txt.xml')
+            shared.CONSTANTS.LOCAL_GIGAWORD_DIR, '000', 'CoreNLP', 'xyz.txt.xml')
         found_path =  dp.path_iteration.get_gigaword_path('000', 'xyz.txt.xml')
         self.assertEqual(found_path, expected_path)
 
 
     def test_get_tokenized_path(self):
         expected_path = os.path.join(
-            dp.CONSTANTS.TOKENIZED_DIR, '000', 'xyz.txt.xml')
+            shared.CONSTANTS.TOKENIZED_DIR, '000', 'xyz.txt.xml')
         found_path =  dp.path_iteration.get_tokenized_path('000', 'xyz.txt.xml')
         self.assertEqual(found_path, expected_path)
 
 
     def test_iter_tokenized_fnames_in_sector(self):
-        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fname_path = os.path.join(shared.CONSTANTS.TEST_DATA_DIR, '000.ls')
         with open(expected_fname_path) as f:
             expected_fnames = [
                 fname[:-4]  # Strip off the ".xml"
@@ -70,7 +71,7 @@ class TestPathIteration(TestCase):
 
 
     def test_iter_tokenized_paths_in_sector(self):
-        expected_fname_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
+        expected_fname_path = os.path.join(shared.CONSTANTS.TEST_DATA_DIR, '000.ls')
         with open(expected_fname_path) as f:
             expected_fnames = [
                 fname[:-4]  # Strip off the ".xml"
