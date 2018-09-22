@@ -1,2 +1,3 @@
 import embedding_creation.make
 import embedding_creation.glove
+import embedding_creation.w2v
