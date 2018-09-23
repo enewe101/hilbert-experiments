@@ -20,10 +20,10 @@ def filter_tokens(in_path, out_path, dictionary):
 if __name__ == '__main__':            
 
     vocab_size = int(sys.argv[1])
-    in_path = shared.CONSTANTS.TOKENIZED_CAT_DIR
+    in_path = shared.CONSTANTS.TOKENIZED_CAT_FULL_PATH
     out_path = os.path.join(
         shared.CONSTANTS.DATA_DIR, 'gigaword_tokenized_cat',
-        'gigaword-tokenized-cat-{vocab}'.format(vocab=vocab_size)
+        'gigaword-tokenized-cat-{vocab}.txt'.format(vocab=vocab_size)
     )
 
     # Get the set of top-k words (k=vocab_size).

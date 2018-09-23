@@ -15,6 +15,10 @@ def read_stats(name):
     return h.cooc_stats.read_stats(path)
 
 
+# This is helpful if cooccurrence statistics have been gathered for shards
+# (which are 1/16ths of gigaword).  But, a simpler approach is to gather
+# cooccurrence statistics on all of gigaword at once, by using the large
+# concatenation of all articles in gigaword, which has one document per line.
 def accumulate_shards(name, truncate_before_adding=None):
     """
     name: Name of the particular cooccurrence statistics.  This is the name
@@ -52,6 +56,11 @@ def accumulate_shards(name, truncate_before_adding=None):
 
 
 def extract_cooccurrence_from_file(path, window, cooccurrences):
+    """
+    Extracts cooccurrence statistics, assuming that the file represents a
+    single document, and counts cooccurrence relationships that span sentences,
+    newlines, and paragraphs etc.
+    """
     with codecs.open(path, 'r', 'utf8') as f:
         tokens = f.read().split()
     for i in range(len(tokens)):
@@ -59,6 +68,47 @@ def extract_cooccurrence_from_file(path, window, cooccurrences):
             if j == i or j < 0 or j >= len(tokens):
                 continue
             cooccurrences.add(tokens[i], tokens[j])
+
+
+
+def extract_cooccurrence_from_file_per_line(
+    path,
+    window,
+    cooccurrences,
+    weighting_scheme='flat',
+):
+    """
+    Extracts cooccurrence statistics, so that cooccurrence is only considered 
+    to occur within each line.  This makes it possible to place separate
+    documents on separate lines, and collect cooccurrences only within each
+    document, while having only one large input file.  Alternatively, it 
+    could be used to only sample cooccurrence within paragraphs or sentences,
+    if the document is preprocessed to put these structural elements on their
+    own lines.
+    """
+    weight = get_weight_getter(weighting_scheme)
+    for with codecs.open(path, 'r', 'utf8') as in_file:
+        for line in in_file:
+            tokens = line.split()
+            for i in range(len(tokens)):
+                if j == i or j < 0 or j >= len(tokens):
+                    continue
+                cooccurrence.add(tokens[i], tokens[j], count=weight(j, window))
+
+
+
+def get_weight_getter(weighting_scheme):
+    if weighting_scheme == 'flat':
+        def weight(j, window_size):
+            return 1
+    elif weighting_scheme == 'dynamic':
+        def weight(j, window_size):
+            return 1./j
+    elif weighting_scheme == 'harmonic':
+        def weight(j, window_size):
+            return float(window_size - j) / window_size
+    return weight
+
 
 
 

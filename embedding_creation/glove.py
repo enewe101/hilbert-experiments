@@ -4,10 +4,12 @@ import shared
 import subprocess
 
 def make_glove_embeddings(out_dir_name='glove', min_count=5, d=300, iterations=15, window_size=5, threads=8, X_max=100):
+    corpus = shared.CONSTANTS.TOKENIZED_CAT_FULL_PATH
+    out_dir = os.path.join(shared.CONSTANTS.EMBEDDINGS_DIR, out_dir_name)
     command = [
         shared.CONSTANTS.LOCAL_GLOVE_EXECUTABLE_PATH,
-        shared.CONSTANTS.TOKENIZED_CAT_DIR,
-        os.path.join(shared.CONSTANTS.EMBEDDINGS_DIR, out_dir_name),
+        corpus,
+        out_dir, 
         shared.CONSTANTS.GLOVE_EXECUTABLE_PATH,
         str(min_count),
         str(d),
@@ -18,6 +20,7 @@ def make_glove_embeddings(out_dir_name='glove', min_count=5, d=300, iterations=1
     ]
     print(' '.join(command))
     return subprocess.run(command)
+
 
 if __name__ == '__main__':
 
