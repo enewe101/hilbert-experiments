@@ -19,3 +19,5 @@ evaluation/sup_datasets
 evaluation/unsup_datasets
 evaluation/np
 test_embs
+evaluation/.idea/
+evaluation/embeddings/

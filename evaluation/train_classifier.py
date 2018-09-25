@@ -4,6 +4,7 @@ import numpy as np
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
 from hilbert_device import DEVICE
+from torch_model import LogisticRegression
 
 
 def _sort_by_length(x, y):
@@ -62,7 +63,10 @@ def train_classifier(h_embs, classifier_constr, kw_params,
 
     # initialize torch things
     model = classifier_constr(h_embs, **kw_params).to(DEVICE)
-    optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
+    if classifier_constr == LogisticRegression:
+        optimizer = torch.optim.LBFGS([p for p in model.parameters() if p.requires_grad])
+    else:
+        optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
     loss_fun = nn.CrossEntropyLoss()
 
     # results storage
@@ -81,7 +85,7 @@ def train_classifier(h_embs, classifier_constr, kw_params,
         for tok_seqs, labels in iter_mb(tr_x, tr_y, mb_size):
             predictions = model(tok_seqs)
             loss = loss_fun(predictions, labels)
-            training_loss += loss.data
+            training_loss += loss.data.item()
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

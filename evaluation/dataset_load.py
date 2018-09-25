@@ -318,8 +318,8 @@ if __name__ == '__main__':
         all_data = load_all()
         np.savez_compressed('np/all_data.npz', np.array([all_data]))
 
-    else:
-    # similarity ds tests
+    def test():
+        # similarity ds tests
         sim_ds = load_similarity()
         for key, sample_list in sim_ds.items():
             print('{:5} samples in {:25}'.format(len(sample_list), key))
@@ -380,4 +380,6 @@ if __name__ == '__main__':
         news.get_stats('train')
         print()
 
+    if testing:
+        test()
 

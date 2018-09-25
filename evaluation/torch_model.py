@@ -33,6 +33,7 @@ class EmbeddingModel(nn.Module):
                               dim=0).to(DEVICE)
 
         # now, put the pretrained ones into them
+        self.torch_padding_id = torch.LongTensor([self.padding_id]).to(DEVICE)
         self.embeddings = nn.Embedding(_n_embs, _dim).to(DEVICE)
         self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=False)
         self.dim = _dim
@@ -50,7 +51,7 @@ class EmbeddingModel(nn.Module):
 
             # add the padding and add the ids
             ids.append(tok_ids + [self.padding_id] * (max_len - len(tok_ids)))
-            pads.append(len(tok_ids))
+            pads.append(max_len - len(tok_ids)) # number of paddings appended
 
         # now convert to long tensors
         torch_ids = torch.LongTensor(ids).to(DEVICE)
@@ -58,6 +59,10 @@ class EmbeddingModel(nn.Module):
 
         # now finally yield the sequence of embeddings
         return self.embeddings(torch_ids), torch_pads
+
+
+    def get_padding_vec(self):
+        return self.embeddings(self.torch_padding_id).reshape(self.dim)
 
 
 
@@ -83,27 +88,43 @@ class EmbeddingPooler(EmbeddingModel):
         embs, pads = super(EmbeddingPooler, self).forward(
             token_minibatch,
         )
+        # shape of embs is batch_size X max_seq_length X embedding_dim
+        mb_size, max_len, emb_dim = embs.shape
 
-        # "extract" the features
-        pools = []
-        for i, emb_seq in enumerate(embs):
-            vec = []
-            if self.do_mean:
-                vec.append(torch.mean(emb_seq[:pads[i]], dim=0))
-            if self.do_max:
-                vec.append(torch.max(emb_seq[:pads[i]], dim=0)[0])
-            pools.append(torch.cat(vec).reshape(1, -1))
+        mean_seqs = None # mb_size X emb_dim
+        if self.do_mean:
+            # here we are constructing the padding offsets to factor in during the
+            # computation of the mean vectors. Much faster than a for-loop.
+            padding_offset = self.get_padding_vec().repeat(mb_size).reshape(mb_size, emb_dim)
+            padding_offset *= pads.float().reshape(mb_size, 1)
 
-        # now we have all the pools, and we don't include the padding when
-        # doing the pooling.
-        pools = torch.cat(pools, dim=0)
-        return pools
+            # now we sum up the sequences (which includes the padding in them)
+            mean_seqs = embs.sum(dim=1)
+
+            # now we subtract away the padding vectors
+            mean_seqs -= padding_offset
+
+            # now we divide by the true length of the sequences, giving us the means
+            mean_seqs /= (max_len - pads).float().reshape(mb_size, 1)
+
+        max_seqs = None # mb_size X emb_dim
+        if self.do_max:
+            # here we will have to ignore the padding, it won't have the max values anyway
+            max_seqs, _ = embs.max(dim=1)
+
+        # return the big boys
+        if (mean_seqs is not None) and (max_seqs is not None):
+            return torch.cat((max_seqs, mean_seqs), dim=1)
+        return mean_seqs if mean_seqs is not None else max_seqs
 
 
 
 # classes for the actual learning models
 class LogisticRegression(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, use_vectors=True, pooling='both'):
+    def __init__(self, h_embs, n_classes,
+                 use_vectors=True,
+                 pooling='mean'
+                 ):
         super(LogisticRegression, self).__init__(
             h_embs, use_vectors=use_vectors, pooling=pooling
         )
@@ -119,8 +140,13 @@ class LogisticRegression(EmbeddingPooler):
         return self.output(pooled_embs)
 
 
+
 class FFNN(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, hdim1, hdim2, use_vectors=True, pooling='both'):
+    def __init__(self, h_embs, n_classes, hdim1, hdim2,
+                 dropout=0.,
+                 use_vectors=True,
+                 pooling='mean',
+                 ):
         super(FFNN, self).__init__(
             h_embs, use_vectors=use_vectors, pooling=pooling
         )
@@ -128,10 +154,13 @@ class FFNN(EmbeddingPooler):
         # number of input features
         in_features = 2 * self.dim if pooling == 'both' else self.dim
         self.model = nn.Sequential(
+            nn.Dropout(p=dropout),
             nn.Linear(in_features, hdim1),
             nn.ReLU(),
+            nn.Dropout(p=dropout),
             nn.Linear(hdim1, hdim2),
             nn.ReLU(),
+            nn.Dropout(p=dropout),
             nn.Linear(hdim2, n_classes)
         )
 

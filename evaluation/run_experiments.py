@@ -1,11 +1,16 @@
 import argparse
+import os
 import hilbert
+import rmsd
 import numpy as np
+import torch
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, classification_report
 from nltk.corpus import stopwords
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
-from dataset_load import HilbertDataset
+from collections import defaultdict
+from dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.torch_model import LogisticRegression, FFNN
 from hilbert_device import DEVICE
@@ -14,7 +19,7 @@ from hilbert_device import DEVICE
 # little helper
 def cossim(v1, v2):
     dot = v1.dot(v2)
-    return dot / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    return dot / (v1.norm() * v2.norm())
 
 
 # global constants
@@ -29,24 +34,20 @@ def similarity_exp(embs, hdataset):
     results = {}
 
     # for showing over time
-    total_iter = sum(len(samples) for samples in hdataset.values())
-    bar = IncrementalBar('Running similarity experiments', max=total_iter)
+    print('Running similarity experiments')
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
         similarities = []
         gold = []
         for w1, w2, gold_score in samples:
-            bar.next()
-
             gold.append(gold_score)
             e1 = embs.get_vec(w1, oov_policy='unk')
             e2 = embs.get_vec(w2, oov_policy='unk')
-            similarities.append(cossim(e1, e2))
+            similarities.append(cossim(e1, e2).item())
         
         results[dname] = spearmanr(gold, similarities)[0]
     
-    bar.finish()
     return results
 
 
@@ -54,35 +55,49 @@ def analogy_exp(embs, hdataset):
     results = {}
 
     # normalize for faster sim calcs.
-    embs.normalize()
+    embs.V = F.normalize(embs.V, p=2, dim=1)
     
     # for showing over time
     total_iter = sum(len(samples) for samples in hdataset.values())
+    iter_step = 100
     bar = IncrementalBar('Running analogy experiments', max=total_iter)
    
     # iterate over the two analogy datasets
     for dname, samples in hdataset.items():
         correct_cosadd = 0
         correct_cosmul = 0
+        missing_words = 0
+        missing_answer = 0
+        total_all_embeddings = 0
 
-        for w1, w2, w3, w4 in samples:
-            bar.next()
-            e1 = embs.get_vec(w1, oov_policy='unk')
-            e2 = embs.get_vec(w2, oov_policy='unk')
-            e3 = embs.get_vec(w3, oov_policy='unk')
+        # w1 is to w2 as w3 is to w4
+        for i, (w1, w2, w3, w4) in enumerate(samples):
+            if i % iter_step == 0: bar.next(n=iter_step)
+
+            if not w4 in embs.dictionary:
+                missing_answer += 1
+                continue
+
+            e1 = embs.get_vec(w1, oov_policy='unk').reshape(-1, 1)
+            e2 = embs.get_vec(w2, oov_policy='unk').reshape(-1, 1)
+            e3 = embs.get_vec(w3, oov_policy='unk').reshape(-1, 1)
 
             # get cos sims for each of them with the dataset
-            ## TODO: combine e1, e2, e3 together and do one mm (maybe it would be slightly faster?)
-            sim1_all = embs.V.mm(e1.reshape(-1, 1))
-            sim2_all = embs.V.mm(e2.reshape(-1, 1))
-            sim3_all = embs.V.mm(e3.reshape(-1, 1))
-            cos_add = sim2_all + sim3_all - sim1_all
-            cos_mul = sim2_all * sim3_all / (sim1_all + 0.0001) # add epsilon to avoid divide by 0
+            sim_all = embs.V.mm(torch.cat([e1, e2, e3], dim=1))
+            #sim1_all, sim2_all, sim3_all = sim_all[:,0], sim_all[:,1], sim_all[:,2]
+            cos_add = sim_all[:,1] + sim_all[:,2] - sim_all[:,0]
+            cos_mul = (sim_all[:,1] * sim_all[:,2]) / (sim_all[:,0] + 0.001) # add epsilon to avoid divide by 0
 
             # make sure we don't get the vecs themselves
+            have_all_embs = True
             for wi in (w1, w2, w3):
-                cos_add[embs.dictionary.get_id(wi)] = -np.inf
-                cos_mul[embs.dictionary.get_id(wi)] = -np.inf
+                try:
+                    w_id = embs.dictionary.get_id(wi)
+                    cos_add[w_id] = -np.inf
+                    cos_mul[w_id] = -np.inf
+                except KeyError:
+                    missing_words += 1
+                    have_all_embs = False
 
             # get the best with argmax
             best_w_add = embs.dictionary.get_token(cos_add.argmax())
@@ -91,11 +106,19 @@ def analogy_exp(embs, hdataset):
             # count up for final accuracy
             correct_cosadd += 1 if w4 == best_w_add else 0
             correct_cosmul += 1 if w4 == best_w_mul else 0
+            total_all_embeddings += 1 if have_all_embs else 0
 
         # save the accuracies
         results[dname] = {
             '3cosadd': correct_cosadd / len(samples),
-            '3cosmul': correct_cosmul / len(samples), 
+            '3cosmul': correct_cosmul / len(samples),
+            '3cosadd_hadanswer': correct_cosadd / (len(samples) - missing_answer),
+            '3cosmul_hadanswer': correct_cosmul / (len(samples) - missing_answer),
+            '3cosadd_fullcoverage': correct_cosadd / total_all_embeddings,
+            '3cosmul_fullcoverage': correct_cosmul / total_all_embeddings,
+            'missing_words': missing_words / (3 * len(samples)),
+            'coverage': total_all_embeddings / len(samples),
+            'missing_answer': missing_answer / len(samples),
         }
 
     bar.finish()
@@ -127,8 +150,8 @@ def sentiment_exp(embs, hdataset, torch_model_str):
     results = train_classifier(embs,
                                neural_constructor,
                                neural_kwargs,
-                               lr=0.001,
-                               n_epochs=50,
+                               lr=0.0005,
+                               n_epochs=150,
                                mb_size=64,
                                early_stop=10,
                                tr_x=tr_x,
@@ -146,12 +169,12 @@ def news_exp(embs, hdataset, torch_model_str):
     neural_constructor = FFNN if torch_model_str == 'ffnn' else LogisticRegression
     neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
     if torch_model_str == 'ffnn':
-        neural_kwargs.update({'hdim1': 128, 'hdim2': 128})
+        neural_kwargs.update({'hdim1': 128, 'hdim2': 128, 'dropout': 0})
     results = train_classifier(embs,
                                neural_constructor,
                                neural_kwargs,
-                               lr=0.001,
-                               n_epochs=50,
+                               lr=0.0005,
+                               n_epochs=150,
                                mb_size=64,
                                early_stop=10,
                                tr_x=tr_x,
@@ -184,6 +207,74 @@ def run_experiments(embs, datasets, kwargs, option='all'):
     return all_results
 
 
+# compare the big boys
+def run_embedding_comparisons(all_embs_dict):
+    names = list(sorted(all_embs_dict.keys()))
+    n = len(names) # I hate repeating len all the time
+
+    # we will be making a triu matrix of all the rotation errors
+    intrinsic_res = np.zeros((n, n))
+    rand_res = np.zeros((n, n))
+    n_intrinsic_res = np.zeros((n, n)) # normalized
+    n_rand_res = np.zeros((n, n)) # normalized
+
+    # send everything to CPU
+    for key, hilbert_emb in all_embs_dict.items():
+        all_embs_dict[key] = hilbert_emb.V.cpu().numpy()
+
+    # iterate over the boys
+    bar = IncrementalBar('Doing Kabsch algorithm...', max=n * n)
+    for i, e1_name in enumerate(names):
+        e1_V = all_embs_dict[e1_name]
+        e1_norms = np.linalg.norm(e1_V, axis=1).reshape(-1, 1)
+
+        for j in range(n):
+            e2_V = all_embs_dict[names[j]] # allow compare with self for i==j
+
+            # we will also be comparing to a normally distributed random matrix
+            # with the same mean and scaling as those of the other embeddings.
+            rand_V = np.random.normal(loc=e2_V.mean(),
+                                      scale=e2_V.std(),
+                                      size=e2_V.shape)
+            rand_norms = np.linalg.norm(rand_V, axis=1).reshape(-1, 1)
+
+            # sanity check
+            assert e1_V.shape == e2_V.shape == rand_V.shape
+
+            # we will be doing comparison with the randomly distributed vecs
+            # in each scenario in order to have robust results
+            rand_res[i, j] = rmsd.kabsch_rmsd(e1_V, rand_V)
+            n_rand_res[i, j] = rmsd.kabsch_rmsd(e1_V / e1_norms, rand_V / rand_norms)
+
+            # compare with the other vecs if j > i (otherwise we already did
+            # that computation earlier for when i > j previously in loop)
+            if j > i:
+                e2_norms = np.linalg.norm(e2_V, axis=1).reshape(-1, 1)
+                intrinsic_res[i, j] = rmsd.kabsch_rmsd(e1_V, e2_V)
+                n_intrinsic_res[i, j] = rmsd.kabsch_rmsd(e1_V / e1_norms, e2_V / e2_norms)
+
+            bar.next()
+    bar.finish()
+
+    np.set_printoptions(precision=4, suppress=True)
+    print('Compared with each other:')
+    print(' '.join(names))
+    print(intrinsic_res)
+
+    print('\nCompared to random:')
+    print(' '.join(names))
+    print(rand_res)
+
+    print('\n[Normalized] Compared with each other:')
+    print(' '.join(names))
+    print(n_intrinsic_res)
+
+    print('\n[Normalized] Compared to random:')
+    print(' '.join(names))
+    print(n_rand_res)
+
+
+
 #### utility functions ###
 def load_embeddings(path):
     e = hilbert.embeddings.Embeddings.load(
@@ -193,6 +284,7 @@ def load_embeddings(path):
     if len(e.V) == 300:
         e.V = e.V.transpose(0, 1)
     return e
+
 
 def get_all_words(list_of_hdatasets):
     vocab = {}
@@ -210,14 +302,31 @@ if __name__ == '__main__':
         help='path to the embeddings we want to process,'
     )
     parser.add_argument('-e', '--exp', type=str, default='all',
-        choices=['all', 'sentiment', 'pos', 'similarity', 
-                 'analogy', 'chunking', 'news'],
+        choices=['all', 'sentiment', 'pos', 'similarity', 'analogy',
+                 'chunking', 'news'],
         help='specific experiment to run, use for debugging'
     )
     parser.add_argument('-c', '--classifier', type=str, default='logreg',
         help='classifier to use in the classification experiments'
     )
-    args = parser.parse_args() 
+    parser.add_argument('--compare', action='store_true',
+        help='if active, we will run the vector comparison protocol over '
+             'all of the embeddings matching the pattern in emb_path arg;'
+             ' i.e., rotation matrix fitting and average error.'
+    )
+    args = parser.parse_args()
+
+    if args.compare:
+        print('Loading all embeddings starting with pattern: {}...'.format(args.emb_path))
+        all_embs = {}
+        splitted = args.emb_path.split('/')
+        directory = '/'.join(splitted[:-1])
+        pattern = splitted[-1]
+        for emb_dname in os.listdir(directory):
+            if emb_dname.startswith(pattern):
+                all_embs[emb_dname] = load_embeddings('{}/{}'.format(directory, emb_dname))
+        run_embedding_comparisons(all_embs)
+        exit(0)
 
     # load up the datasets and get the vocab we will need.
     print('Loading datasets...')
@@ -226,8 +335,9 @@ if __name__ == '__main__':
     print('Loading/building embeddings...')
     m_emb = load_embeddings(args.emb_path)
 
-    m_kwargs = {'news': {'torch_model_str': args.classifier},
-                'sentiment': {'torch_model_str': args.classifier}}
+    m_kwargs = defaultdict(lambda: {})
+    m_kwargs.update({'news': {'torch_model_str': args.classifier},
+                     'sentiment': {'torch_model_str': args.classifier}})
 
     # run the experiments!
     exps = run_experiments(m_emb, m_datasets, kwargs=m_kwargs, option=args.exp)
@@ -236,6 +346,8 @@ if __name__ == '__main__':
         print('Results for {}:'.format(m_name))
         if type(m_res) == dict:
             for m_key, m_item in m_res.items():
-                print('\t{}: {}'.format(m_key, m_item))
-
+                try:
+                    print('\t{:25}: {:.3f}'.format(m_key, m_item))
+                except Exception:
+                    print('\t{:25}: {}'.format(m_key, m_item))
 
