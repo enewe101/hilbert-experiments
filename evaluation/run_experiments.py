@@ -12,7 +12,8 @@ from progress.bar import IncrementalBar
 from collections import defaultdict
 from dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
-from evaluation.torch_model import LogisticRegression, FFNN
+from evaluation.train_seq_labeller import train_seq_labeller
+from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM
 from hilbert_device import DEVICE
 
 
@@ -42,6 +43,7 @@ def similarity_exp(embs, hdataset):
         gold = []
         for w1, w2, gold_score in samples:
             gold.append(gold_score)
+
             e1 = embs.get_vec(w1, oov_policy='unk')
             e2 = embs.get_vec(w2, oov_policy='unk')
             similarities.append(cossim(e1, e2).item())
@@ -125,14 +127,32 @@ def analogy_exp(embs, hdataset):
     return results
 
 
-def pos_tag_exp(embs, hdataset, safe=True):
+def pos_tag_exp(embs, hdataset):
    
     # get the training data
-    tr_x, tr_y = hdataset.get_x_y('train')
-    te_x, te_y = hdataset.get_x_y('test')
+    tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True)
+    te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True)
 
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token
+    neural_constructor = SeqLabLSTM
+    neural_kwargs = {'n_labels': len(hdataset.labels_to_idx),
+                     'hdim': 256,
+                     'n_layers': 2}
+
+    results = train_seq_labeller(embs,
+                                 neural_constructor,
+                                 neural_kwargs,
+                                 lr=0.001,
+                                 n_epochs=250,
+                                 mb_size=16,
+                                 early_stop=15,
+                                 tr_x=tr_x,
+                                 tr_y=tr_y,
+                                 te_x=te_x,
+                                 te_y=te_y,
+                                 verbose=True,)
+    return results
 
 
 def chunking_exp(embs, hdataset):

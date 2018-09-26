@@ -120,7 +120,7 @@ class HilbertDataset(object):
 
         # set our label-to-idx storage if it has not been set before
         if len(self.labels_to_idx) == 0:
-            self.labels_to_idx = {l: i for i, l in enumerate(unique_labs)}
+            self.labels_to_idx = {l: i + 1 for i, l in enumerate(unique_labs)}
 
         # return a list of indicies of labels, rather than the string labels themselves
         if as_indicies:
@@ -142,6 +142,7 @@ class HilbertDataset(object):
                 # set the y labels
                 if type(yval) == list:
                     labs_idx.append([self.labels_to_idx[lab] for lab in yval])
+                    assert all(idx > 0 for idx in labs_idx[-1])  # all labels MUST start at 1 (padding is 0)
                 else:
                     labs_idx.append(self.labels_to_idx[yval])
 
@@ -172,6 +173,8 @@ class HilbertDataset(object):
         for label, count in sorted(counts.items(), key=lambda t: t[1]):
             print('\t{:20}: {:6} samples ({:0.3f}% of total)'.format(
                     label, count, count / total * 100))
+        print('\t{} TOTAL'.format(total))
+        print('\t{}, length of Y'.format(len(y)))
 
 
     def get_unique_words_counts(self):
@@ -311,7 +314,7 @@ def load_all():
 
 # main for basic testing
 if __name__ == '__main__':
-    testing = False
+    testing = True
     
     if not testing:
         # save it all up

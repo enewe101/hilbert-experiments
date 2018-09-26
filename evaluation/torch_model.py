@@ -1,14 +1,18 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from hilbert_device import DEVICE
 
+
+
+# Generic model to feed forward token sequences to embeddings
 class EmbeddingModel(nn.Module):
     """
     Generic module that stores pre-trained embeddings for any
     other neural model we'll be implementing.
     """
-    def __init__(self, h_embs, use_vectors=True):
+    def __init__(self, h_embs, use_vectors=True, zero_padding=False):
         super(EmbeddingModel, self).__init__()
 
         if not use_vectors:
@@ -22,9 +26,12 @@ class EmbeddingModel(nn.Module):
         self.padding_id = len(h_embs.dictionary) + 1
 
         # set up the padding embeddings
-        _padding = torch.from_numpy(np.random.normal(
-            -0.15, 0.15, _dim
-        )).reshape(1, -1).float().to(DEVICE)
+        if zero_padding:
+            _padding = torch.zeros(1, _dim).to(DEVICE)
+        else:
+            _padding = torch.from_numpy(np.random.normal(
+                -0.15, 0.15, _dim
+            )).reshape(1, -1).float().to(DEVICE)
 
         # combine them all
         _all_embs = torch.cat((h_embs.V.float(),
@@ -34,9 +41,12 @@ class EmbeddingModel(nn.Module):
 
         # now, put the pretrained ones into them
         self.torch_padding_id = torch.LongTensor([self.padding_id]).to(DEVICE)
-        self.embeddings = nn.Embedding(_n_embs, _dim).to(DEVICE)
+
+        # if we want to use zero padding we need this kwarg
+        _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
+        self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(DEVICE)
         self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=False)
-        self.dim = _dim
+        self.emb_dim = _dim
 
 
     def forward(self, sorted_tok_ids):
@@ -44,9 +54,11 @@ class EmbeddingModel(nn.Module):
         :param sorted_tok_ids: sorted by length list of lists of tokens
         :return: tensor of embeddings, with padding, for a downstream model
         """
-        max_len = len(sorted_tok_ids[-1]) # must be sorted by length on input
-        ids = []
-        pads = [] # store indexes when padding starts
+        # must be sorted by length on input, either increasing or decreasing
+        max_len = max(len(sorted_tok_ids[0]), len(sorted_tok_ids[-1]))
+
+        ids = [] # the actual token ids
+        pads = [] # store number of pads in each thing
         for tok_ids in sorted_tok_ids:
 
             # add the padding and add the ids
@@ -62,7 +74,7 @@ class EmbeddingModel(nn.Module):
 
 
     def get_padding_vec(self):
-        return self.embeddings(self.torch_padding_id).reshape(self.dim)
+        return self.embeddings(self.torch_padding_id).reshape(self.emb_dim)
 
 
 
@@ -129,7 +141,7 @@ class LogisticRegression(EmbeddingPooler):
             h_embs, use_vectors=use_vectors, pooling=pooling
         )
         # number of input features
-        in_features = 2 * self.dim if pooling == 'both' else self.dim
+        in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
         self.output = nn.Linear(in_features, n_classes)
 
 
@@ -152,7 +164,7 @@ class FFNN(EmbeddingPooler):
         )
         assert hdim1 > 0 and hdim2 > 0
         # number of input features
-        in_features = 2 * self.dim if pooling == 'both' else self.dim
+        in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
         self.model = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features, hdim1),
@@ -169,3 +181,115 @@ class FFNN(EmbeddingPooler):
             token_minibatch,
         )
         return self.model(pooled_embs)
+
+
+
+# LSTM for sequence labelling (POS-tagging!)
+class SeqLabLSTM(EmbeddingModel):
+
+    # universal constant, do not change!
+    PADDING_LABEL_ID = 0
+
+
+    # extends the EmbeddingModel class which uses our pretrained embeddings.
+    def __init__(self, h_embs, n_labels, hdim,
+                 n_layers=1,
+                 use_vectors=True,
+                 bidirectional=True
+                 ):
+        super(SeqLabLSTM, self).__init__(h_embs, use_vectors=use_vectors, zero_padding=True)
+        assert hdim > 0 and n_labels > 0 and n_layers > 0
+        self.hidden_dim = hdim
+        self.n_layers = n_layers
+        self.n_labels = n_labels
+        self.n_directions = 2 if bidirectional else 1
+
+        # the big boy LSTM that does all the work
+        self.lstm = nn.LSTM(input_size=self.emb_dim,
+                            hidden_size=self.hidden_dim,
+                            num_layers=self.n_layers,
+                            batch_first=True,
+                            bidirectional=bidirectional)
+
+        # output label prediction at each time step
+        self.hidden_to_label = nn.Linear(self.hidden_dim * self.n_directions, self.n_labels)
+
+        # don't do hidden initialization until we know the batch size
+        self.hidden = None
+
+
+    def init_hidden(self, mb_size):
+        hc = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(DEVICE)
+        hh = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(DEVICE)
+        return hc, hh
+
+
+    def forward(self, sorted_tok_ids):
+        # get the tensor with emb sequences, along with the number of pads in each seq
+        emb_seqs, pads = super(SeqLabLSTM, self).forward(sorted_tok_ids)
+
+        # now we gotta do some special packing
+        # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)
+        bsz, max_len, emb_dim = emb_seqs.shape
+        X = nn.utils.rnn.pack_padded_sequence(emb_seqs, max_len - pads, batch_first=True)
+
+        # run it, always init the hidden states in this part of the run
+        self.hidden = self.init_hidden(bsz)
+        X, self.hidden = self.lstm(X, self.hidden)
+
+        # undo the packing to get (batch_size * seq_len_for_each, hidden_dim)
+        X, _ = nn.utils.rnn.pad_packed_sequence(X, batch_first=True)
+
+        # now predict the labels
+        X = X.contiguous()
+        X = X.view(-1, X.shape[2]) # dim is max_len * bsz, hdim
+
+        # run through the linear tag prediction
+        X = self.hidden_to_label(X) # dim is max_len * bsz, n_labels
+
+        # softmax activations in the feed forward for an easy main method
+        Y_hat = F.log_softmax(X, dim=1)
+        return Y_hat.view(bsz, max_len, self.n_labels)
+
+
+    def loss(self, Y_hat, padded_labels):
+        # https://towardsdatascience.com/taming-lstms-variable-sized-mini-batches...
+        # before we calculate the negative log likelihood, we need to mask out the activations
+        # this means we don't want to take into account padded items in the output vector
+        # simplest way to think about this is to flatten ALL sequences into a REALLY long sequence
+        # and calculate the loss on that.
+
+        # flatten all the labels, a longtensor of labels (with padding)
+        Y = padded_labels.view(-1)
+        mask = (Y != self.PADDING_LABEL_ID).float() # create a mask by zeroing out padding tokens
+
+        # flatten all predictions
+        Y_hat = Y_hat.view(-1, self.n_labels)
+
+        # count how many tokens we have
+        n_tokens = int(torch.sum(mask).item())
+
+        # pick the values for the label and zero out the rest with the mask
+        # must do Y - 1 for the real label indexes (pushed from the padding label, which is 0)
+        Y_hat = Y_hat[range(Y_hat.shape[0]), Y - 1] * mask
+
+        # compute cross entropy loss which ignores all the pads
+        ce_loss = -torch.sum(Y_hat) / n_tokens
+        return ce_loss
+
+
+    def get_label_predictions(self, Y_hat, padded_labels):
+        # flatten all the labels, a longtensor of labels (with padding)
+        Y = padded_labels.view(-1)
+        mask = (Y != self.PADDING_LABEL_ID).long()
+
+        # flatten all predictions
+        Y_hat = Y_hat.view(-1, self.n_labels)
+
+        # pick the values for the label
+        _, preds = torch.max(Y_hat, dim=1)
+
+        # zero out the paddings preds and return the label predictions
+        # the plus one is for pushing them back to the label indexes
+        return (preds + 1) * mask
+
