@@ -86,8 +86,13 @@ def analogy_exp(embs, hdataset):
 
             # get cos sims for each of them with the dataset
             sim_all = embs.V.mm(torch.cat([e1, e2, e3], dim=1))
-            #sim1_all, sim2_all, sim3_all = sim_all[:,0], sim_all[:,1], sim_all[:,2]
+
+            # calculuate 3cosadd
             cos_add = sim_all[:,1] + sim_all[:,2] - sim_all[:,0]
+
+            # 3cosmul requires all similarities to be nonnegative, conveniently told to us in a footnote.
+            # see footnote 7 in http://anthology.aclweb.org/W/W14/W14-1618.pdf
+            sim_all = (sim_all + 1) / 2
             cos_mul = (sim_all[:,1] * sim_all[:,2]) / (sim_all[:,0] + 0.001) # add epsilon to avoid divide by 0
 
             # make sure we don't get the vecs themselves
@@ -127,6 +132,9 @@ def analogy_exp(embs, hdataset):
     return results
 
 
+# TODO: write code to tune the hyperparams of ALL of the models.
+# TODO: considering adding a CRF on top of the LSTM predictions.
+# TODO: serialize results systematically.
 def pos_tag_exp(embs, hdataset):
    
     # get the training data
@@ -137,7 +145,7 @@ def pos_tag_exp(embs, hdataset):
     # y is list of pos-tag lists for each token
     neural_constructor = SeqLabLSTM
     neural_kwargs = {'n_labels': len(hdataset.labels_to_idx),
-                     'hdim': 256,
+                     'hdim': 64,
                      'n_layers': 2}
 
     results = train_seq_labeller(embs,
@@ -145,7 +153,7 @@ def pos_tag_exp(embs, hdataset):
                                  neural_kwargs,
                                  lr=0.001,
                                  n_epochs=250,
-                                 mb_size=16,
+                                 mb_size=256,
                                  early_stop=15,
                                  tr_x=tr_x,
                                  tr_y=tr_y,
@@ -209,7 +217,8 @@ def news_exp(embs, hdataset, torch_model_str):
 NAMES_TO_FUN = {
     'similarity': similarity_exp,
     'analogy': analogy_exp,
-    'pos': pos_tag_exp,
+    'brown-pos': pos_tag_exp,
+    'wsj-pos': pos_tag_exp,
     'chunking': chunking_exp,
     'sentiment': sentiment_exp,
     'news': news_exp,
@@ -322,8 +331,8 @@ if __name__ == '__main__':
         help='path to the embeddings we want to process,'
     )
     parser.add_argument('-e', '--exp', type=str, default='all',
-        choices=['all', 'sentiment', 'pos', 'similarity', 'analogy',
-                 'chunking', 'news'],
+        choices=['all', 'sentiment', 'brown-pos', 'similarity', 'analogy',
+                 'chunking', 'news', 'wsj-pos'],
         help='specific experiment to run, use for debugging'
     )
     parser.add_argument('-c', '--classifier', type=str, default='logreg',

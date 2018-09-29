@@ -2,7 +2,7 @@ import nltk
 import numpy as np
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
-from nltk.corpus import brown, conll2000, stopwords
+from nltk.corpus import brown, conll2000, ptb, stopwords
 from os import listdir
 
 UNSUP_DIR = 'unsup_datasets/'
@@ -234,15 +234,33 @@ def load_analogies():
     return datasets
 
 
-def load_pos_tagging():
+def load_brown_pos_tagging():
     """
     Returns a full list representing the dataset.
         Each item is a sentence built of (word, tag) tuples for each token.
     """
-    dataset = HilbertDataset('pos', False)
+    dataset = HilbertDataset('brown-pos', is_unsupervised=False)
     sents_tags = [[(w.lower(), t) for w, t in s]
                   for s in brown.tagged_sents(tagset='universal')]
     dataset.add_full(sents_tags)
+    return dataset
+
+
+def load_wsj_pos_tagging():
+    """
+    Returns a full list representing the WSJ PTB2 dataset for POS-tagging.
+        Each item is a sentence built of (word, tag) tuples for each token.
+    """
+    dataset = HilbertDataset('wsj-pos', is_unsupervised=False)
+    files = list(ptb.fileids())
+    test_dirs = ['22', '23', '24']
+    train_d, test_d = [], []
+    for f in files:
+        data_list = test_d if f[4:6] in test_dirs else train_d
+        data_list += [[(w.lower(), t) for w, t in s]
+                       for s in ptb.tagged_sents(f)]
+    dataset.add_train(train_d)
+    dataset.add_test(test_d)
     return dataset
 
 
@@ -297,7 +315,8 @@ def load_all():
     all_hilbs = [
         load_similarity(),
         load_analogies(),
-        load_pos_tagging(),
+        load_brown_pos_tagging(),
+        load_wsj_pos_tagging(),
         load_chunking(),
         load_sentiment(),
         load_news_classification(),
@@ -347,8 +366,16 @@ if __name__ == '__main__':
 
         # pos tags
         print('Pos tagging')
-        pos = load_pos_tagging()
+        pos = load_brown_pos_tagging()
         pos.split_train_test()
+        x, y = pos.get_x_y('train')
+        print(x[0:2])
+        print(y[0:2])
+        pos.get_stats('train')
+        print()
+
+        print('WSJ Pos tagging')
+        pos = load_wsj_pos_tagging()
         x, y = pos.get_x_y('train')
         print(x[0:2])
         print(y[0:2])
