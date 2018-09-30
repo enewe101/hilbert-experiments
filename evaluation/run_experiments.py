@@ -1,12 +1,8 @@
-import argparse
-import os
 import hilbert
-import rmsd
 import numpy as np
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, classification_report
-from nltk.corpus import stopwords
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
 from collections import defaultdict
@@ -14,7 +10,9 @@ from dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
 from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM
-from hilbert_device import DEVICE
+from evaluation.constants import *
+from evaluation.results import ResultsHolder
+from evaluation.hparams import HParams
 
 
 # little helper
@@ -23,16 +21,17 @@ def cossim(v1, v2):
     return dot / (v1.norm() * v2.norm())
 
 
-# global constants
-stopwords = set(stopwords.words('english'))
-SENTI_STOPS = stopwords.copy()
-SENTI_STOPS.difference_update({'no', 'not'})
-SENTI_STOPS.update({'.'})
-EMB_DIM = 300
-
-
-def similarity_exp(embs, hdataset):
-    results = {}
+# Beginning of our experimental code.
+def similarity_exp(embs, hdataset, hparams):
+    """
+    Runs all 11 of the word similarity experiments on the set of
+    embeddings passed to it.
+    :param embs: Embeddings class, a hilbert embeddings object.
+    :param hdataset: HilbertDataset object
+    :param hparams: unused - kept for interface functionality
+    :return: ResultsHolder object
+    """
+    results = ResultsHolder(SIMILARITY)
 
     # for showing over time
     print('Running similarity experiments')
@@ -41,20 +40,35 @@ def similarity_exp(embs, hdataset):
     for dname, samples in hdataset.items():
         similarities = []
         gold = []
+        had_coverage = []
         for w1, w2, gold_score in samples:
+            had_coverage.append(w1 in embs.dictionary and w2 in embs.dictionary)
             gold.append(gold_score)
 
             e1 = embs.get_vec(w1, oov_policy='unk')
             e2 = embs.get_vec(w2, oov_policy='unk')
             similarities.append(cossim(e1, e2).item())
-        
-        results[dname] = spearmanr(gold, similarities)[0]
+
+        covered = [(p, g) for i, (p, g) in enumerate(zip(similarities,gold)) if had_coverage[i]]
+        results.add_ds_results(dname, {
+            'full-spearman': spearmanr(gold, similarities)[0],
+            'covered-spearman': spearmanr(*zip(*covered))[0],
+            'coverage': sum(had_coverage) / len(had_coverage),
+        })
     
     return results
 
 
-def analogy_exp(embs, hdataset):
-    results = {}
+def analogy_exp(embs, hdataset, hparams):
+    """
+    Runs the two big analogy datasets on the set of embeddings passed
+    to it. Calculates 3cosadd and 3cosmul.
+    :param embs: Embeddings class, a hilbert embeddings object.
+    :param hdataset: HilbertDataset object
+    :param hparams: unused - kept for interface functionality
+    :return: ResultsHolder object
+    """
+    results = ResultsHolder(ANALOGY)
 
     # normalize for faster sim calcs.
     embs.V = F.normalize(embs.V, p=2, dim=1)
@@ -116,17 +130,17 @@ def analogy_exp(embs, hdataset):
             total_all_embeddings += 1 if have_all_embs else 0
 
         # save the accuracies
-        results[dname] = {
+        results.add_ds_results(dname, {
             '3cosadd': correct_cosadd / len(samples),
             '3cosmul': correct_cosmul / len(samples),
-            '3cosadd_hadanswer': correct_cosadd / (len(samples) - missing_answer),
-            '3cosmul_hadanswer': correct_cosmul / (len(samples) - missing_answer),
-            '3cosadd_fullcoverage': correct_cosadd / total_all_embeddings,
-            '3cosmul_fullcoverage': correct_cosmul / total_all_embeddings,
+            '3cosadd_had_answer': correct_cosadd / (len(samples) - missing_answer),
+            '3cosmul_had_answer': correct_cosmul / (len(samples) - missing_answer),
+            '3cosadd_full_coverage': correct_cosadd / total_all_embeddings,
+            '3cosmul_full_coverage': correct_cosmul / total_all_embeddings,
             'missing_words': missing_words / (3 * len(samples)),
-            'coverage': total_all_embeddings / len(samples),
             'missing_answer': missing_answer / len(samples),
-        }
+            'coverage': total_all_embeddings / len(samples),
+        })
 
     bar.finish()
     return results
@@ -135,52 +149,73 @@ def analogy_exp(embs, hdataset):
 # TODO: write code to tune the hyperparams of ALL of the models.
 # TODO: considering adding a CRF on top of the LSTM predictions.
 # TODO: serialize results systematically.
-def pos_tag_exp(embs, hdataset):
+# TODO: improve documentation.
+
+def seq_labelling_exp(embs, hdataset, hparams):
+    """
+
+    :param embs:
+    :param hdataset:
+    :param hparams: HParams
+    :return:
+    """
    
     # get the training data
-    tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True)
-    te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True)
+    tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=True)
+    te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=True)
 
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token
     neural_constructor = SeqLabLSTM
     neural_kwargs = {'n_labels': len(hdataset.labels_to_idx),
-                     'hdim': 64,
-                     'n_layers': 2}
+                     'rnn_hdim': hparams.rnn_hdim,
+                     'n_layers': hparams.n_layers,
+                     'dropout': hparams.dropout}
 
-    results = train_seq_labeller(embs,
+    results = train_seq_labeller(hdataset.name,
+                                 embs,
                                  neural_constructor,
                                  neural_kwargs,
-                                 lr=0.001,
+                                 lr=hparams.lr,
                                  n_epochs=250,
-                                 mb_size=256,
+                                 mb_size=hparams.mb_size,
                                  early_stop=15,
                                  tr_x=tr_x,
                                  tr_y=tr_y,
                                  te_x=te_x,
                                  te_y=te_y,
-                                 verbose=True,)
+                                 verbose=True,
+                                 schedule_lr=hparams.schedule_lr)
     return results
 
 
-def chunking_exp(embs, hdataset):
-    pass
+def classification_exp(embs, hdataset, hparams):
+    """
 
+    :param embs:
+    :param hdataset:
+    :param hparams: HParams
+    :return:
+    """
+    tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=False)
+    te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=False)
 
-def sentiment_exp(embs, hdataset, torch_model_str):
-    tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True)
-    te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True)
-
-    neural_constructor = FFNN if torch_model_str == 'ffnn' else LogisticRegression
+    neural_constructor = FFNN if hparams.model_str == 'ffnn' else LogisticRegression
     neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
-    if torch_model_str == 'ffnn':
-        neural_kwargs.update({'hdim1': 128, 'hdim2': 128})
-    results = train_classifier(embs,
+
+    # special parameters for a FFNN
+    if hparams.model_str == 'ffnn':
+        neural_kwargs.update({'hdim1': hparams.hdim1,
+                              'hdim2': hparams.hdim2,
+                              'dropout': hparams.dropout})
+
+    results = train_classifier(hdataset.name,
+                               embs,
                                neural_constructor,
                                neural_kwargs,
-                               lr=0.0005,
+                               lr=hparams.lr,
                                n_epochs=150,
-                               mb_size=64,
+                               mb_size=hparams.mb_size,
                                early_stop=10,
                                tr_x=tr_x,
                                tr_y=tr_y,
@@ -188,129 +223,15 @@ def sentiment_exp(embs, hdataset, torch_model_str):
                                te_y=te_y,
                                verbose=True,)
     return results
-
-
-def news_exp(embs, hdataset, torch_model_str):
-    tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True)
-    te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True)
-
-    neural_constructor = FFNN if torch_model_str == 'ffnn' else LogisticRegression
-    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
-    if torch_model_str == 'ffnn':
-        neural_kwargs.update({'hdim1': 128, 'hdim2': 128, 'dropout': 0})
-    results = train_classifier(embs,
-                               neural_constructor,
-                               neural_kwargs,
-                               lr=0.0005,
-                               n_epochs=150,
-                               mb_size=64,
-                               early_stop=10,
-                               tr_x=tr_x,
-                               tr_y=tr_y,
-                               te_x=te_x,
-                               te_y=te_y,
-                               verbose=True,)
-    return results
-
-
-### primary running code below ###
-NAMES_TO_FUN = {
-    'similarity': similarity_exp,
-    'analogy': analogy_exp,
-    'brown-pos': pos_tag_exp,
-    'wsj-pos': pos_tag_exp,
-    'chunking': chunking_exp,
-    'sentiment': sentiment_exp,
-    'news': news_exp,
-}
-
-
-# main function
-def run_experiments(embs, datasets, kwargs, option='all'):
-    all_results = {}
-    for dname, hilbertd in datasets.items():
-        if option == 'all' or dname == option:
-            exp = NAMES_TO_FUN[dname]
-            all_results[dname] = exp(embs, hilbertd, **kwargs[dname])
-            print(all_results[dname])
-    return all_results
-
-
-# compare the big boys
-def run_embedding_comparisons(all_embs_dict):
-    names = list(sorted(all_embs_dict.keys()))
-    n = len(names) # I hate repeating len all the time
-
-    # we will be making a triu matrix of all the rotation errors
-    intrinsic_res = np.zeros((n, n))
-    rand_res = np.zeros((n, n))
-    n_intrinsic_res = np.zeros((n, n)) # normalized
-    n_rand_res = np.zeros((n, n)) # normalized
-
-    # send everything to CPU
-    for key, hilbert_emb in all_embs_dict.items():
-        all_embs_dict[key] = hilbert_emb.V.cpu().numpy()
-
-    # iterate over the boys
-    bar = IncrementalBar('Doing Kabsch algorithm...', max=n * n)
-    for i, e1_name in enumerate(names):
-        e1_V = all_embs_dict[e1_name]
-        e1_norms = np.linalg.norm(e1_V, axis=1).reshape(-1, 1)
-
-        for j in range(n):
-            e2_V = all_embs_dict[names[j]] # allow compare with self for i==j
-
-            # we will also be comparing to a normally distributed random matrix
-            # with the same mean and scaling as those of the other embeddings.
-            rand_V = np.random.normal(loc=e2_V.mean(),
-                                      scale=e2_V.std(),
-                                      size=e2_V.shape)
-            rand_norms = np.linalg.norm(rand_V, axis=1).reshape(-1, 1)
-
-            # sanity check
-            assert e1_V.shape == e2_V.shape == rand_V.shape
-
-            # we will be doing comparison with the randomly distributed vecs
-            # in each scenario in order to have robust results
-            rand_res[i, j] = rmsd.kabsch_rmsd(e1_V, rand_V)
-            n_rand_res[i, j] = rmsd.kabsch_rmsd(e1_V / e1_norms, rand_V / rand_norms)
-
-            # compare with the other vecs if j > i (otherwise we already did
-            # that computation earlier for when i > j previously in loop)
-            if j > i:
-                e2_norms = np.linalg.norm(e2_V, axis=1).reshape(-1, 1)
-                intrinsic_res[i, j] = rmsd.kabsch_rmsd(e1_V, e2_V)
-                n_intrinsic_res[i, j] = rmsd.kabsch_rmsd(e1_V / e1_norms, e2_V / e2_norms)
-
-            bar.next()
-    bar.finish()
-
-    np.set_printoptions(precision=4, suppress=True)
-    print('Compared with each other:')
-    print(' '.join(names))
-    print(intrinsic_res)
-
-    print('\nCompared to random:')
-    print(' '.join(names))
-    print(rand_res)
-
-    print('\n[Normalized] Compared with each other:')
-    print(' '.join(names))
-    print(n_intrinsic_res)
-
-    print('\n[Normalized] Compared to random:')
-    print(' '.join(names))
-    print(n_rand_res)
-
 
 
 #### utility functions ###
 def load_embeddings(path):
     e = hilbert.embeddings.Embeddings.load(
         path,
-        device=DEVICE.type,
+        device=HParams.DEVICE.type,
     )
-    if len(e.V) == 300:
+    if len(e.V) == EMB_DIM:
         e.V = e.V.transpose(0, 1)
     return e
 
@@ -324,59 +245,27 @@ def get_all_words(list_of_hdatasets):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Run experiments on set of embeddings.'
-    )
-    parser.add_argument('emb_path', type=str,
-        help='path to the embeddings we want to process,'
-    )
-    parser.add_argument('-e', '--exp', type=str, default='all',
-        choices=['all', 'sentiment', 'brown-pos', 'similarity', 'analogy',
-                 'chunking', 'news', 'wsj-pos'],
-        help='specific experiment to run, use for debugging'
-    )
-    parser.add_argument('-c', '--classifier', type=str, default='logreg',
-        help='classifier to use in the classification experiments'
-    )
-    parser.add_argument('--compare', action='store_true',
-        help='if active, we will run the vector comparison protocol over '
-             'all of the embeddings matching the pattern in emb_path arg;'
-             ' i.e., rotation matrix fitting and average error.'
-    )
-    args = parser.parse_args()
-
-    if args.compare:
-        print('Loading all embeddings starting with pattern: {}...'.format(args.emb_path))
-        all_embs = {}
-        splitted = args.emb_path.split('/')
-        directory = '/'.join(splitted[:-1])
-        pattern = splitted[-1]
-        for emb_dname in os.listdir(directory):
-            if emb_dname.startswith(pattern):
-                all_embs[emb_dname] = load_embeddings('{}/{}'.format(directory, emb_dname))
-        run_embedding_comparisons(all_embs)
-        exit(0)
+    ## Adding m_ to all variable names to indicate they only belong in main, not globals.
+    m_hparams = HParams() # parses args
 
     # load up the datasets and get the vocab we will need.
     print('Loading datasets...')
     m_datasets = np.load('np/all_data.npz')['arr_0'][0]
 
     print('Loading/building embeddings...')
-    m_emb = load_embeddings(args.emb_path)
+    m_emb = load_embeddings(m_hparams.emb_path)
 
-    m_kwargs = defaultdict(lambda: {})
-    m_kwargs.update({'news': {'torch_model_str': args.classifier},
-                     'sentiment': {'torch_model_str': args.classifier}})
+    m_names_to_fun = {
+        SIMILARITY: similarity_exp,
+        ANALOGY: analogy_exp,
+        BROWN_POS: seq_labelling_exp,
+        WSJ_POS: seq_labelling_exp,
+        CHUNKING: seq_labelling_exp,
+        SENTIMENT: classification_exp,
+        NEWS: classification_exp,
+    }
 
-    # run the experiments!
-    exps = run_experiments(m_emb, m_datasets, kwargs=m_kwargs, option=args.exp)
-    for m_name, m_res in exps.items():
-        if m_res is None: continue
-        print('Results for {}:'.format(m_name))
-        if type(m_res) == dict:
-            for m_key, m_item in m_res.items():
-                try:
-                    print('\t{:25}: {:.3f}'.format(m_key, m_item))
-                except Exception:
-                    print('\t{:25}: {}'.format(m_key, m_item))
-
+    m_exp = m_names_to_fun[m_hparams.experiment]
+    m_ds = m_datasets[m_hparams.experiment]
+    m_results = m_exp(m_emb, m_ds, m_hparams)
+    m_results.pretty_print()

@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from torch.optim import lr_scheduler
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
-from hilbert_device import DEVICE
-from train_classifier import sort_by_length
-from torch_model import SeqLabLSTM
+from evaluation.train_classifier import sort_by_length
+from evaluation.torch_model import SeqLabLSTM
+from evaluation.results import ResultsHolder
+from evaluation.hparams import HParams
 
 
 def pad_labels(labels):
@@ -13,7 +15,7 @@ def pad_labels(labels):
     max_len = max(len(labels[0]), len(labels[-1]))
     pad = SeqLabLSTM.PADDING_LABEL_ID
     return torch.LongTensor([lab_seq + [pad] * (max_len - len(lab_seq))
-                             for lab_seq in labels]).to(DEVICE)
+                             for lab_seq in labels]).to(HParams.DEVICE)
 
 
 def iter_seq_mb(x, y, minibatch_size):
@@ -52,13 +54,15 @@ def feed_full_seq_ds(neural_model, minibatch_size, x, y):
     return correct / total
 
 
-def train_seq_labeller(h_embs, constr, kw_params,
-                         lr, n_epochs, mb_size, early_stop,
-                         tr_x, tr_y, te_x, te_y,
-                         eval_train=True,
-                         verbose=True):
+def train_seq_labeller(exp_name, h_embs, constr, kw_params,
+                       lr, n_epochs, mb_size, early_stop,
+                       tr_x, tr_y, te_x, te_y,
+                       schedule_lr=False,
+                       eval_train=True,
+                       verbose=True):
     """
     Main function to train any classifier object.
+    :param exp_name: name of the experiment (e.g., POS-wsj)
     :param h_embs: HilbertEmbeddings object
     :param constr: constructor that extends EmbeddingModel
     :param kw_params: dictionary of kwargs
@@ -70,6 +74,7 @@ def train_seq_labeller(h_embs, constr, kw_params,
     :param tr_y: training set y from a Hilbert dataset
     :param te_x: test set X from a Hilbert dataset
     :param te_y: test set y from a Hilbert dataset
+    :param schedule_lr: use a plateau-based scheduled learning rate
     :param eval_train: feed full training set after each epoch - expensive!
     :param verbose: if true, display everything at every epoch
     :return: results
@@ -86,8 +91,14 @@ def train_seq_labeller(h_embs, constr, kw_params,
     te_x, te_y = sort_by_length(te_x, te_y, reverse=True)
 
     # initialize torch things
-    model = constr(h_embs, **kw_params).to(DEVICE)
+    model = constr(h_embs, **kw_params).to(HParams.DEVICE)
     optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
+
+    # learning rate scheduler to maximize the validation set accuracy.
+    # default with a dummy scheduler where no change occurs
+    scheduler = lr_scheduler.ReduceLROnPlateau(
+        optimizer, patience=early_stop // 5, mode='max', min_lr=0 if schedule_lr else lr
+    )
 
     # results storage
     results = defaultdict(lambda: [])
@@ -139,6 +150,9 @@ def train_seq_labeller(h_embs, constr, kw_params,
                 if early_stop_count <= 0:
                     break
 
+            #### Update the LR schedule! ####
+            scheduler.step(val_acc)
+
             # print results
             if verbose:
                 for key in sorted(results.keys()):
@@ -146,9 +160,11 @@ def train_seq_labeller(h_embs, constr, kw_params,
                     print('    {:10} - {:4f}'.format(key, results[key][-1]))
 
     # return the results!
-    results.update({'best_val_acc': best_val_acc,
-                    'best_epoch': best_epoch,
-                    'test_acc_at_best_epoch': results['test_acc'][best_epoch]})
-    return results
+    results.update({'best_epoch': best_epoch,
+                    'best_validation_accuracy': best_val_acc,
+                    'test_accuracy_at_best_epoch': results['test_acc'][best_epoch]})
+    hilb_res = ResultsHolder(exp_name)
+    hilb_res.add_ds_results('full', results)
+    return hilb_res
 
 

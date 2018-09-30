@@ -3,8 +3,9 @@ import torch.nn as nn
 import numpy as np
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
-from hilbert_device import DEVICE
-from torch_model import LogisticRegression
+from evaluation.torch_model import LogisticRegression
+from evaluation.hparams import HParams
+from evaluation.results import ResultsHolder
 
 
 def sort_by_length(x, y, reverse=False):
@@ -17,7 +18,7 @@ def iter_mb(x, y, minibatch_size):
     for i in range((len(x) // minibatch_size) + 1):
         seqs = x[i * minibatch_size: (i + 1) * minibatch_size]
         labels = y[i * minibatch_size: (i + 1) * minibatch_size]
-        yield seqs, torch.LongTensor(labels).to(DEVICE)
+        yield seqs, torch.LongTensor(labels).to(HParams.DEVICE)
 
 
 def feed_full_ds(neural_model, minibatch_size, x, y):
@@ -29,18 +30,19 @@ def feed_full_ds(neural_model, minibatch_size, x, y):
     return correct / len(x)
 
 
-def train_classifier(h_embs, classifier_constr, kw_params,
+def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
                      lr, n_epochs, mb_size, early_stop,
                      tr_x, tr_y, te_x, te_y,
                      eval_train=True,
                      verbose=True):
     """
     Main function to train any classifier object.
+    :param exp_name: name of the experiment (e.g., POS-wsj)
     :param h_embs: HilbertEmbeddings object
     :param classifier_constr: constructor that extends EmbeddingModel
     :param kw_params: dictionary of kwargs
     :param lr: learning rate
-    :param n_epochs: number of epochs to train for
+    :param n_epochs: max number of epochs to train for
     :param mb_size: size of minibatches
     :param early_stop: number of epochs to stop after no improvement is seen
     :param tr_x: training set X from a Hilbert dataset
@@ -63,7 +65,7 @@ def train_classifier(h_embs, classifier_constr, kw_params,
     te_x, te_y = sort_by_length(te_x, te_y)
 
     # initialize torch things
-    model = classifier_constr(h_embs, **kw_params).to(DEVICE)
+    model = classifier_constr(h_embs, **kw_params).to(HParams.DEVICE)
     if classifier_constr == LogisticRegression:
         optimizer = torch.optim.LBFGS([p for p in model.parameters() if p.requires_grad])
     else:
@@ -89,7 +91,7 @@ def train_classifier(h_embs, classifier_constr, kw_params,
             training_loss += loss.data.item()
             optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            optimizer.step(lambda: 0) # TODO: figure out this closure bullshit
         training_loss /= len(tr_x) // mb_size
         results['loss'].append(training_loss)
 
@@ -98,9 +100,9 @@ def train_classifier(h_embs, classifier_constr, kw_params,
         with torch.no_grad():
             model.eval()
             # bigger mbsize for test set because we want to go through it as fast as possible
-            train_acc = feed_full_ds(model, 1024, tr_x, tr_y) if eval_train else np.nan
-            val_acc = feed_full_ds(model, 1024, val_x, val_y)
-            test_acc = feed_full_ds(model, 1024, te_x, te_y)
+            train_acc = feed_full_ds(model, 512, tr_x, tr_y) if eval_train else np.nan
+            val_acc = feed_full_ds(model, 512, val_x, val_y)
+            test_acc = feed_full_ds(model, 512, te_x, te_y)
 
             for acc, string in zip([train_acc, val_acc, test_acc], ['train', 'val', 'test']):
                 results['{}_acc'.format(string)].append(acc)
@@ -125,6 +127,8 @@ def train_classifier(h_embs, classifier_constr, kw_params,
     results.update({'best_val_acc': best_val_acc,
                     'best_epoch': best_epoch,
                     'test_acc_at_best_epoch': results['test_acc'][best_epoch]})
-    return results
+    hresults = ResultsHolder(exp_name)
+    hresults.add_ds_results('full', results)
+    return hresults
 
 

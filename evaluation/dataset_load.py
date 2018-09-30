@@ -1,13 +1,14 @@
 import nltk
 import numpy as np
+import argparse
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
-from nltk.corpus import brown, conll2000, ptb, stopwords
+from nltk.corpus import brown, conll2000, ptb
 from os import listdir
+from evaluation.constants import *
 
 UNSUP_DIR = 'unsup_datasets/'
 SUP_DIR = 'sup_datasets/'
-STOPS = set(stopwords.words('english'))
 
 # filter helper function
 def filter_words(tok_list, filter_stops):
@@ -87,8 +88,15 @@ class HilbertDataset(object):
                                                    random_state=1917)
 
 
-    def get_x_y(self, ds_set, ds_dict=None, as_indicies=False, filter_stopwords=True):
+    def get_x_y(self, ds_set,
+                ds_dict=None,
+                as_indicies=False,
+                filter_stopwords=False,
+                translate_label_by_one=False,
+                ):
         self.sup_check(ds_set)
+        label_translate = 1 if translate_label_by_one else 0
+        set_indices = len(self.labels_to_idx) == 0 and as_indicies
         _x = []
         _y = []
 
@@ -105,7 +113,8 @@ class HilbertDataset(object):
                 _y.append(label)
 
                 # updating the unique labels for seq classificatoin
-                if len(self.labels_to_idx) == 0: unique_labs.add(label)
+                if set_indices:
+                    unique_labs.add(label)
 
             # otherwise, this is token-level seq-to-seq classification
             else:
@@ -116,11 +125,12 @@ class HilbertDataset(object):
                 _y.append(labels)
 
                 # updating the unique labels for seq-to-seq
-                if len(self.labels_to_idx) == 0: unique_labs.update(set(labels))
+                if set_indices:
+                    unique_labs.update(set(labels))
 
         # set our label-to-idx storage if it has not been set before
-        if len(self.labels_to_idx) == 0:
-            self.labels_to_idx = {l: i + 1 for i, l in enumerate(unique_labs)}
+        if set_indices:
+            self.labels_to_idx = {l: i + label_translate for i, l in enumerate(unique_labs)}
 
         # return a list of indicies of labels, rather than the string labels themselves
         if as_indicies:
@@ -142,9 +152,10 @@ class HilbertDataset(object):
                 # set the y labels
                 if type(yval) == list:
                     labs_idx.append([self.labels_to_idx[lab] for lab in yval])
-                    assert all(idx > 0 for idx in labs_idx[-1])  # all labels MUST start at 1 (padding is 0)
+                    assert all(idx >= label_translate for idx in labs_idx[-1])  # all labels MUST start at 1 (padding is 0)
                 else:
                     labs_idx.append(self.labels_to_idx[yval])
+
 
             # return all the indexed boys
             return toks_idx, labs_idx
@@ -333,14 +344,23 @@ def load_all():
 
 # main for basic testing
 if __name__ == '__main__':
-    testing = True
-    
-    if not testing:
+    parser = argparse.ArgumentParser(description='build datasets for hilbert.')
+    parser.add_argument('--testing', action='store_true',
+                        help='run tests over the datasets')
+    args = parser.parse_args()
+
+    if not args.testing:
         # save it all up
         all_data = load_all()
         np.savez_compressed('np/all_data.npz', np.array([all_data]))
 
     def test():
+
+        class TestDictionary(object):
+            def get_id(self, t):
+                return 0
+
+
         # similarity ds tests
         sim_ds = load_similarity()
         for key, sample_list in sim_ds.items():
@@ -365,13 +385,24 @@ if __name__ == '__main__':
         print('Analogy tests passed.\n')
 
         # pos tags
-        print('Pos tagging')
+        print('Brown Pos tagging')
         pos = load_brown_pos_tagging()
         pos.split_train_test()
         x, y = pos.get_x_y('train')
         print(x[0:2])
         print(y[0:2])
         pos.get_stats('train')
+        # testing labelling
+        x, y = pos.get_x_y('train', ds_dict=TestDictionary(),
+                           as_indicies=True,
+                           translate_label_by_one=True)
+        uniques = set()
+        for label_list in y:
+            for label in label_list:
+                uniques.add(label)
+        for label_list in y:
+            for label in label_list:
+                assert 0 < label <= len(uniques)
         print()
 
         print('WSJ Pos tagging')
@@ -380,36 +411,66 @@ if __name__ == '__main__':
         print(x[0:2])
         print(y[0:2])
         pos.get_stats('train')
+        # testing labelling
+        x, y = pos.get_x_y('train', ds_dict=TestDictionary(),
+                           as_indicies=True,
+                           translate_label_by_one=True)
+        uniques = set()
+        for label_list in y:
+            for label in label_list:
+                uniques.add(label)
+        for label_list in y:
+            for label in label_list:
+                assert 0 < label <= len(uniques)
         print()
         
         # chunking
-        print('Chunking')
-        chunk = load_chunking()
-        x, y = chunk.get_x_y('train')
-        print(x[0:2])
-        print(y[0:2])
-        chunk.get_stats('train')
-        print()
+        # print('Chunking')
+        # chunk = load_chunking()
+        # x, y = chunk.get_x_y('train')
+        # print(x[0:2])
+        # print(y[0:2])
+        # chunk.get_stats('train')
+        # print()
         
         # sentiment
         print('Sentiment')
         sent = load_sentiment()
-        x, y = sent.get_x_y('train')
+        x, y = sent.get_x_y('train', filter_stopwords=True)
         print(x[0:2])
         print(y[0:2])
         sent.get_stats('train')
+
+        # testing labelling
+        x, y = sent.get_x_y('train', ds_dict=TestDictionary(),
+                            as_indicies=True,
+                            translate_label_by_one=False)
+        uniques = set(y)
+        assert 0 in uniques
+        for label in y:
+            assert 0 <= label < len(uniques)
         print()
 
         # news
         print('News')
         news = load_news_classification()
         news.split_train_test()
-        x, y = news.get_x_y('train')
+        x, y = news.get_x_y('train', filter_stopwords=True)
         print(x[0:2])
         print(y[0:2])
         news.get_stats('train')
+
+        # testing labelling
+        x, y = sent.get_x_y('train', ds_dict=TestDictionary(),
+                            as_indicies=True,
+                            translate_label_by_one=False)
+        uniques = set(y)
+        assert 0 in uniques
+        for label in y:
+            assert 0 <= label < len(uniques)
         print()
 
-    if testing:
+
+    if args.testing:
         test()
 

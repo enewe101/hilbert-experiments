@@ -1,0 +1,69 @@
+
+
+Hyperparams for neural models:
+- learning rate          1e-3, 1e-4
+- lr schedule            False, True
+- # of layers            1, 2
+- dropout                0, 0.5
+
+- minibatch size         16, 64, 256
+- hidden dimensionality  128, 256, 512
+
+==> 128 different tests.
+
+
+
+
+
+
+
+
+
+
+
+Validation acc on WSJ is below--
+
+
+
+Model with LSTM 1-layer, 64 units, bsz 16
+0.9489794080025943
+
+Same but with bsz 128:
+0.9549606355955105
+
+Same but with bsz 256:
+0.9574017691462338
+
+Same but with bsz 512:
+0.95896913902751
+
+Same but with bsz 1024: 
+0.9588250130614157
+
+
+
+LSTM 2-layer. 64 units, bsz 512:
+0.9606355955104762
+
+LSTM 2-layer. 64 units, bsz 256:
+0.958446682400418
+
+
+
+Indication - use large minibatches [?]
+-- Problem for the deeper models is overfitting.
+
+
+BIG LSTM 2-layer, 256 units, BS 512:
+0.9593744933071504
+
+
+BIG LSTM 2-layer, 256 units, BS 256:
+0.9605905561460717
+
+
+BIG LSTM 2-layer, 256 units, BS 128:
+0.9629596267137478
+
+
+

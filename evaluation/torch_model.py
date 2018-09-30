@@ -2,8 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from hilbert_device import DEVICE
-
+from evaluation.hparams import HParams
 
 
 # Generic model to feed forward token sequences to embeddings
@@ -27,24 +26,24 @@ class EmbeddingModel(nn.Module):
 
         # set up the padding embeddings
         if zero_padding:
-            _padding = torch.zeros(1, _dim).to(DEVICE)
+            _padding = torch.zeros(1, _dim).to(HParams.DEVICE)
         else:
             _padding = torch.from_numpy(np.random.normal(
                 -0.15, 0.15, _dim
-            )).reshape(1, -1).float().to(DEVICE)
+            )).reshape(1, -1).float().to(HParams.DEVICE)
 
         # combine them all
         _all_embs = torch.cat((h_embs.V.float(),
                                h_embs.unk.float().reshape(1, -1),
                                _padding),
-                              dim=0).to(DEVICE)
+                              dim=0).to(HParams.DEVICE)
 
         # now, put the pretrained ones into them
-        self.torch_padding_id = torch.LongTensor([self.padding_id]).to(DEVICE)
+        self.torch_padding_id = torch.LongTensor([self.padding_id]).to(HParams.DEVICE)
 
         # if we want to use zero padding we need this kwarg
         _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
-        self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(DEVICE)
+        self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(HParams.DEVICE)
         self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=False)
         self.emb_dim = _dim
 
@@ -66,8 +65,8 @@ class EmbeddingModel(nn.Module):
             pads.append(max_len - len(tok_ids)) # number of paddings appended
 
         # now convert to long tensors
-        torch_ids = torch.LongTensor(ids).to(DEVICE)
-        torch_pads = torch.LongTensor(pads).to(DEVICE)
+        torch_ids = torch.LongTensor(ids).to(HParams.DEVICE)
+        torch_pads = torch.LongTensor(pads).to(HParams.DEVICE)
 
         # now finally yield the sequence of embeddings
         return self.embeddings(torch_ids), torch_pads
@@ -135,7 +134,7 @@ class EmbeddingPooler(EmbeddingModel):
 class LogisticRegression(EmbeddingPooler):
     def __init__(self, h_embs, n_classes,
                  use_vectors=True,
-                 pooling='mean'
+                 pooling='mean',
                  ):
         super(LogisticRegression, self).__init__(
             h_embs, use_vectors=use_vectors, pooling=pooling
@@ -192,14 +191,15 @@ class SeqLabLSTM(EmbeddingModel):
 
 
     # extends the EmbeddingModel class which uses our pretrained embeddings.
-    def __init__(self, h_embs, n_labels, hdim,
+    def __init__(self, h_embs, n_labels, rnn_hdim,
                  n_layers=1,
                  use_vectors=True,
-                 bidirectional=True
+                 bidirectional=True,
+                 dropout=0,
                  ):
         super(SeqLabLSTM, self).__init__(h_embs, use_vectors=use_vectors, zero_padding=True)
-        assert hdim > 0 and n_labels > 0 and n_layers > 0
-        self.hidden_dim = hdim
+        assert rnn_hdim > 0 and n_labels > 0 and n_layers > 0
+        self.hidden_dim = rnn_hdim
         self.n_layers = n_layers
         self.n_labels = n_labels
         self.n_directions = 2 if bidirectional else 1
@@ -209,7 +209,8 @@ class SeqLabLSTM(EmbeddingModel):
                             hidden_size=self.hidden_dim,
                             num_layers=self.n_layers,
                             batch_first=True,
-                            bidirectional=bidirectional)
+                            bidirectional=bidirectional,
+                            dropout=dropout)
 
         # output label prediction at each time step
         self.hidden_to_label = nn.Linear(self.hidden_dim * self.n_directions, self.n_labels)
@@ -219,8 +220,8 @@ class SeqLabLSTM(EmbeddingModel):
 
 
     def init_hidden(self, mb_size):
-        hc = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(DEVICE)
-        hh = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(DEVICE)
+        hc = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(HParams.DEVICE)
+        hh = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(HParams.DEVICE)
         return hc, hh
 
 
