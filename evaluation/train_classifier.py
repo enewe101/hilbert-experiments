@@ -91,7 +91,7 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
             training_loss += loss.data.item()
             optimizer.zero_grad()
             loss.backward()
-            optimizer.step(lambda: 0) # TODO: figure out this closure bullshit
+            optimizer.step(lambda: 0) # TODO: figure out this closure bullshit!!!
         training_loss /= len(tr_x) // mb_size
         results['loss'].append(training_loss)
 
