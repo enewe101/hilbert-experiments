@@ -6,6 +6,25 @@ from evaluation.run_experiments import load_embeddings
 from progress.bar import IncrementalBar
 
 
+# make sure all of the tokens are ordered in same way
+def equalize_token_order(all_embs_dict):
+    all_tokens_in_common = set()
+    for key, hilbert_emb in all_embs_dict.items():
+        h_tokens = set(hilbert_emb.dictionary.tokens)
+        if len(all_tokens_in_common) == 0:
+            all_tokens_in_common = h_tokens
+        else:
+            all_tokens_in_common.intersection_update(h_tokens)
+    print('Tokens in common: {}'.format(len(all_tokens_in_common)))
+
+    # now make sure all rows are in same order
+    all_tokens = list(sorted(all_tokens_in_common))
+    for key, hilbert_emb in all_embs_dict.items():
+        ids = np.array([hilbert_emb.dictionary.get_id(t) for t in all_tokens])
+        matrix = hilbert_emb.V.cpu().numpy()
+        all_embs_dict[key] = matrix[ids] # resorting the rows
+
+
 # compare the big boys
 def run_embedding_comparisons(all_embs_dict):
     names = list(sorted(all_embs_dict.keys()))
@@ -16,10 +35,6 @@ def run_embedding_comparisons(all_embs_dict):
     rand_res = np.zeros((n, n))
     n_intrinsic_res = np.zeros((n, n)) # normalized
     n_rand_res = np.zeros((n, n)) # normalized
-
-    # send everything to CPU
-    for key, hilbert_emb in all_embs_dict.items():
-        all_embs_dict[key] = hilbert_emb.V.cpu().numpy()
 
     # iterate over the boys
     bar = IncrementalBar('Doing Kabsch algorithm...', max=n * n)
@@ -38,7 +53,10 @@ def run_embedding_comparisons(all_embs_dict):
             rand_norms = np.linalg.norm(rand_V, axis=1).reshape(-1, 1)
 
             # sanity check
-            assert e1_V.shape == e2_V.shape == rand_V.shape
+            assert e1_V.shape == e2_V.shape == rand_V.shape, \
+                '{} shape: {}; {} shape: {}; rand shape: {}'.format(
+                    e1_name, e1_V.shape, names[j], e2_V.shape, rand_V.shape
+                )
 
             # we will be doing comparison with the randomly distributed vecs
             # in each scenario in order to have robust results
@@ -55,7 +73,7 @@ def run_embedding_comparisons(all_embs_dict):
             bar.next()
     bar.finish()
 
-    np.set_printoptions(precision=4, suppress=True)
+    np.set_printoptions(precision=4, suppress=True, linewidth=90)
     print('Compared with each other:')
     print(' '.join(names))
     print(intrinsic_res)
@@ -90,5 +108,6 @@ if __name__ == '__main__':
     for emb_dname in os.listdir(directory):
         if emb_dname.startswith(pattern):
             all_embs[emb_dname] = load_embeddings('{}/{}'.format(directory, emb_dname))
+    equalize_token_order(all_embs)
     run_embedding_comparisons(all_embs)
 

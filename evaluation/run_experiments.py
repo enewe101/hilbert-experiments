@@ -200,7 +200,15 @@ def classification_exp(embs, hdataset, hparams):
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=False)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=False)
 
-    neural_constructor = FFNN if hparams.model_str == 'ffnn' else LogisticRegression
+    # set the neural constructor
+    if hparams.model_str.lower() == 'ffnn':
+        neural_constructor = FFNN
+    elif hparams.model_str.lower() == 'logreg':
+        neural_constructor = LogisticRegression
+    else:
+        raise NotImplementedError('Constructor model \"{}\" not '
+                                  'implemented!'.format(hparams.model_str))
+
     neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
 
     # special parameters for a FFNN
@@ -214,13 +222,14 @@ def classification_exp(embs, hdataset, hparams):
                                neural_constructor,
                                neural_kwargs,
                                lr=hparams.lr,
-                               n_epochs=150,
+                               n_epochs=250,
                                mb_size=hparams.mb_size,
-                               early_stop=10,
+                               early_stop=15,
                                tr_x=tr_x,
                                tr_y=tr_y,
                                te_x=te_x,
                                te_y=te_y,
+                               schedule_lr=hparams.schedule_lr,
                                verbose=True,)
     return results
 
