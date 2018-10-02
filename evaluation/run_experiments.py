@@ -179,15 +179,14 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  lr=hparams.lr,
                                  n_epochs=250,
                                  mb_size=hparams.mb_size,
-                                 early_stop=15,
+                                 early_stop=20,
                                  tr_x=tr_x,
                                  tr_y=tr_y,
                                  te_x=te_x,
                                  te_y=te_y,
                                  normalize_gradient=hparams.normalize_gradient,
                                  schedule_lr=hparams.schedule_lr,
-                                 verbose=True,
-                                 )
+                                 verbose=True,)
     return results
 
 
@@ -226,7 +225,7 @@ def classification_exp(embs, hdataset, hparams):
                                lr=hparams.lr,
                                n_epochs=250,
                                mb_size=hparams.mb_size,
-                               early_stop=15,
+                               early_stop=20,
                                tr_x=tr_x,
                                tr_y=tr_y,
                                te_x=te_x,
@@ -237,11 +236,9 @@ def classification_exp(embs, hdataset, hparams):
 
 
 #### utility functions ###
-def load_embeddings(path):
-    e = hilbert.embeddings.Embeddings.load(
-        path,
-        device=HParams.DEVICE.type,
-    )
+def load_embeddings(path, device=None):
+    e = hilbert.embeddings.Embeddings.load(path,
+            device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
         e.V = e.V.transpose(0, 1)
     return e
@@ -263,7 +260,7 @@ if __name__ == '__main__':
     print('Loading datasets...')
     m_datasets = np.load('np/all_data.npz')['arr_0'][0]
 
-    print('Loading/building embeddings...')
+    print('Loading embeddings...')
     m_emb = load_embeddings(m_hparams.emb_path)
 
     m_names_to_fun = {
@@ -279,4 +276,6 @@ if __name__ == '__main__':
     m_exp = m_names_to_fun[m_hparams.experiment]
     m_ds = m_datasets[m_hparams.experiment]
     m_results = m_exp(m_emb, m_ds, m_hparams)
+
+    # TODO: formalize results serialization
     m_results.pretty_print()
