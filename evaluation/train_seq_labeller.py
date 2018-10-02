@@ -1,7 +1,7 @@
 import torch
-import torch.nn as nn
 import numpy as np
 from torch.optim import lr_scheduler
+from torch.nn.utils.clip_grad import clip_grad_norm_
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
 from evaluation.train_classifier import sort_by_length
@@ -9,6 +9,8 @@ from evaluation.torch_model import SeqLabLSTM
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
 
+
+MAX_MB_SIZE = 1024
 
 def pad_labels(labels):
     # pad the labels here, sequence padding is done in special way later
@@ -58,7 +60,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
                        lr, n_epochs, mb_size, early_stop,
                        tr_x, tr_y, te_x, te_y,
                        schedule_lr=False,
-                       eval_train=True,
+                       normalize_gradient=False,
                        verbose=True):
     """
     Main function to train any classifier object.
@@ -75,7 +77,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
     :param te_x: test set X from a Hilbert dataset
     :param te_y: test set y from a Hilbert dataset
     :param schedule_lr: use a plateau-based scheduled learning rate
-    :param eval_train: feed full training set after each epoch - expensive!
+    :param normalize_gradient: perform gradient normalization, making max norm be 1
     :param verbose: if true, display everything at every epoch
     :return: results
     """
@@ -97,7 +99,8 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
     # learning rate scheduler to maximize the validation set accuracy.
     # default with a dummy scheduler where no change occurs
     scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=early_stop // 5, mode='max', min_lr=0 if schedule_lr else lr
+        optimizer, patience=early_stop // 5, mode='max',
+        min_lr=0 if schedule_lr else lr, verbose=verbose
     )
 
     # results storage
@@ -115,11 +118,18 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
         training_loss, total = 0, 0
         model.train()
         for tok_seqs, labels in iter_seq_mb(tr_x, tr_y, mb_size):
+            optimizer.zero_grad()
             yhat = model(tok_seqs)
             loss = model.loss(yhat, pad_labels(labels))
-
-            optimizer.zero_grad()
             loss.backward()
+
+            # normalize gradient, if desired
+            if normalize_gradient:
+                gnorm = clip_grad_norm_([p for p in model.parameters() if p.requires_grad],
+                                        max_norm=1, norm_type=2)
+                results['gnorm'].append(gnorm)
+
+            # do the backprop update
             optimizer.step()
 
             training_loss += loss.data.item()
@@ -133,9 +143,9 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
         with torch.no_grad():
             model.eval()
             # bigger mbsize for test set because we want to go through it as fast as possible
-            train_acc = feed_full_seq_ds(model, 512, tr_x, tr_y) if eval_train else np.nan
-            val_acc = feed_full_seq_ds(model, 512, val_x, val_y)
-            test_acc = feed_full_seq_ds(model, 512, te_x, te_y)
+            train_acc = feed_full_seq_ds(model, max(mb_size, MAX_MB_SIZE), tr_x, tr_y)
+            val_acc = feed_full_seq_ds(model, max(mb_size, MAX_MB_SIZE), val_x, val_y)
+            test_acc = feed_full_seq_ds(model, max(mb_size, MAX_MB_SIZE), te_x, te_y)
 
             for acc, string in zip([train_acc, val_acc, test_acc], ['train', 'val', 'test']):
                 results['{}_acc'.format(string)].append(acc)

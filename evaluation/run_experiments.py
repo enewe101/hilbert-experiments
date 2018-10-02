@@ -184,8 +184,10 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  tr_y=tr_y,
                                  te_x=te_x,
                                  te_y=te_y,
+                                 normalize_gradient=hparams.normalize_gradient,
+                                 schedule_lr=hparams.schedule_lr,
                                  verbose=True,
-                                 schedule_lr=hparams.schedule_lr)
+                                 )
     return results
 
 
