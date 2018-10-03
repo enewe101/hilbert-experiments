@@ -2,10 +2,8 @@ import hilbert
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, classification_report
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
-from collections import defaultdict
 from dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
@@ -147,17 +145,19 @@ def analogy_exp(embs, hdataset, hparams):
 
 
 # TODO: write code to tune the hyperparams of ALL of the models.
-# TODO: considering adding a CRF on top of the LSTM predictions.
+# TODO: add CRF on top of the LSTM predictions.
 # TODO: serialize results systematically.
 # TODO: improve documentation.
 
 def seq_labelling_exp(embs, hdataset, hparams):
     """
-
-    :param embs:
-    :param hdataset:
+    Run a sequence labelling experiment over some dataset. For example,
+    over the wsj-pos or brown-pos datasets/Hilbert experiments. Returns
+    a nice results object with everything stored in it.
+    :param embs: HilbertEmbeddings object
+    :param hdataset: HilbertDataset object (for sequence labelling)
     :param hparams: HParams
-    :return:
+    :return: ResultsHolder
     """
    
     # get the training data
@@ -192,11 +192,12 @@ def seq_labelling_exp(embs, hdataset, hparams):
 
 def classification_exp(embs, hdataset, hparams):
     """
-
-    :param embs:
-    :param hdataset:
+    Run a classification experiment over some dataset. For example,
+    over the sentiment or news datasets. Returns results object.
+    :param embs: HilbertEmbeddings object
+    :param hdataset: HilbertDataset object (for classification)
     :param hparams: HParams
-    :return:
+    :return: ResultsHolder
     """
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=False)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=False)

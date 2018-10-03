@@ -6,6 +6,7 @@ from evaluation.hparams import HParams
 
 
 # Generic model to feed forward token sequences to embeddings
+# TODO: allow for learning the embeddings from scratch.
 class EmbeddingModel(nn.Module):
     """
     Generic module that stores pre-trained embeddings for any
@@ -84,11 +85,7 @@ class EmbeddingPooler(EmbeddingModel):
     - it pools together word embeddings according to either mean
     pooling, max pooling, or both. It ignores padding.
     """
-    def __init__(self,
-                 h_embs,
-                 use_vectors=True,
-                 pooling='mean',
-                 ):
+    def __init__(self, h_embs, use_vectors=True, pooling='mean'):
         super(EmbeddingPooler, self).__init__(h_embs, use_vectors)
         self.pooling = pooling
         self.do_mean = self.pooling == 'both' or self.pooling == 'mean'
@@ -96,9 +93,8 @@ class EmbeddingPooler(EmbeddingModel):
 
 
     def forward(self, token_minibatch):
-        embs, pads = super(EmbeddingPooler, self).forward(
-            token_minibatch,
-        )
+        embs, pads = super(EmbeddingPooler, self).forward(token_minibatch)
+
         # shape of embs is batch_size X max_seq_length X embedding_dim
         mb_size, max_len, emb_dim = embs.shape
 
@@ -132,22 +128,17 @@ class EmbeddingPooler(EmbeddingModel):
 
 # classes for the actual learning models
 class LogisticRegression(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes,
-                 use_vectors=True,
-                 pooling='mean',
-                 ):
+    def __init__(self, h_embs, n_classes, use_vectors=True, pooling='mean'):
         super(LogisticRegression, self).__init__(
-            h_embs, use_vectors=use_vectors, pooling=pooling
-        )
+            h_embs, use_vectors=use_vectors, pooling=pooling)
+
         # number of input features
         in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
         self.output = nn.Linear(in_features, n_classes)
 
 
     def forward(self, token_minibatch):
-        pooled_embs = super(LogisticRegression, self).forward(
-            token_minibatch,
-        )
+        pooled_embs = super(LogisticRegression, self).forward(token_minibatch)
         return self.output(pooled_embs)
 
 
@@ -156,12 +147,10 @@ class FFNN(EmbeddingPooler):
     def __init__(self, h_embs, n_classes, hdim1, hdim2,
                  dropout=0.,
                  use_vectors=True,
-                 pooling='mean',
-                 ):
-        super(FFNN, self).__init__(
-            h_embs, use_vectors=use_vectors, pooling=pooling
-        )
+                 pooling='mean'):
+        super(FFNN, self).__init__(h_embs, use_vectors=use_vectors, pooling=pooling)
         assert hdim1 > 0 and hdim2 > 0
+
         # number of input features
         in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
         self.model = nn.Sequential(
@@ -176,9 +165,7 @@ class FFNN(EmbeddingPooler):
         )
 
     def forward(self, token_minibatch):
-        pooled_embs = super(FFNN, self).forward(
-            token_minibatch,
-        )
+        pooled_embs = super(FFNN, self).forward(token_minibatch)
         return self.model(pooled_embs)
 
 
@@ -195,10 +182,10 @@ class SeqLabLSTM(EmbeddingModel):
                  n_layers=1,
                  use_vectors=True,
                  bidirectional=True,
-                 dropout=0,
-                 ):
+                 dropout=0):
         super(SeqLabLSTM, self).__init__(h_embs, use_vectors=use_vectors, zero_padding=True)
         assert rnn_hdim > 0 and n_labels > 0 and n_layers > 0
+
         self.hidden_dim = rnn_hdim
         self.n_layers = n_layers
         self.n_labels = n_labels
