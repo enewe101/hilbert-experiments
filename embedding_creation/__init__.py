@@ -1,3 +1,5 @@
 import embedding_creation.make
 import embedding_creation.glove
 import embedding_creation.w2v
+import embedding_creation.w2v_simulation
+import embedding_creation.CONSTANTS

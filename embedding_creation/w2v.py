@@ -2,70 +2,67 @@ import os
 import sys
 import shared
 import subprocess
+import embedding_creation as ec
 
 def make_w2v_embeddings(
-    corpus,
-    out_dir_name='w2v',
+    corpus_fname,
+    out_dir_name,
     d=300,
-    window_size=5,
+    window=5,
     k=15,
-    t_undersample=1e-5,
-    threads=8,
-    num_iterations=15
+    t_undersample=1,
+    threads=1,
+    num_iterations=1000,
+    min_count=1
 ):
+    corpus_path = os.path.join(shared.CONSTANTS.TOKENIZED_CAT_DIR, corpus_fname)
+    # Prepare the path to vectors, and make sure output dir exists.
+    out_dir = os.path.join(shared.CONSTANTS.EMBEDDINGS_DIR, out_dir_name)
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    vectors_path = os.path.join(out_dir, 'vectors.txt')
 
+    # Set options that are considered as constants for our purposes.
+    mode = 0
+    hierarchical_sample = 0
+    binary = 0
+    cbow = 0 # 0 => skipgram; 1 => cbow
+
+    # Run the word2vec program, using the established options settings.
     command = [
-        shared.CONSTANTS.LOCAL_W2V_EXECUTABLE_PATH,
-        corpus,
-        os.path.join(shared.CONSTANTS.EMBEDDINGS_DIR, out_dir_name),
-        str(d),
-        str(window_size),
-        str(k),
-        str(t_undersample),
-        str(threads),
-        str(num_iterations),
+        #'time',
+        ec.CONSTANTS.W2V_EXECUTABLE_PATH,
+        '-train', corpus_path,
+        '-output', vectors_path,
+        '-cbow', str(cbow),
+        '-size', str(d),
+        '-window', str(window),
+        '-negative', str(k),
+        '-hs', str(hierarchical_sample),
+        '-sample', str(t_undersample),
+        '-threads', str(threads),
+        '-binary', str(binary), 
+        '-iter', str(num_iterations),
+        '-min-count', str(min_count)
     ]
     print(' '.join(command))
     return subprocess.run(command)
 
+
 if __name__ == '__main__':
 
-    replicate = int(sys.argv[1])
-    vocab_size = int(sys.argv[2])
+    corpus_fname = sys.argv[1]
+    out_dir_name = sys.argv[2]
     threads = int(sys.argv[3])
 
-    if vocab_size != 10000 and vocab_size != 100000:
-        print('vocab size should be 10000 or 100000.')
-        sys.exit(1)
-    if vocab_size == 10000:
-        corpus = os.path.join(
-            shared.CONSTANTS.TOKENIZED_CAT_DIR,
-            'gigaword-tokenized-cat-10001.txt'
-        )
-        out_dir_name = 'std-w2v-10k-rep{rep}'.format(rep=replicate)
+    print("Reading corpus {}.\nWriting embeddings to {}.\nThreads {}.\n".format(
+        corpus_fname,
+        out_dir_name,
+        threads
+    ))
 
-    elif vocab_size == 100000:
-        corpus = os.path.join(
-            shared.CONSTANTS.TOKENIZED_CAT_DIR,
-            'gigaword-tokenized-cat-100255.txt'
-        )
-        out_dir_name = 'std-w2v-100k-rep{rep}'.format(rep=replicate)
-
-    print(
-        "Using vocab size {vocab_size}. "
-        "Reading corpus {corpus}. "
-        "Writing embeddings to {out}. "
-        "Replicant {rep}.  "
-        "Threads {threads}.".format(
-            vocab_size=vocab_size,
-            corpus=corpus,
-            out=out_dir_name,
-            rep=str(replicate),
-            threads=str(threads)
-        )
-    )
     make_w2v_embeddings(
-        corpus,
+        corpus_fname,
         out_dir_name,
         threads=threads
     )
