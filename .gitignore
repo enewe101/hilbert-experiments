@@ -11,3 +11,14 @@ env3
 test-data
 .nfs*
 overflow*bin
+evaluation/datasets
+evaluation/tmp/
+evaluation/aclImdb*
+evaluation/.zips/aclImdb*
+tmp/
+evaluation/sup_datasets
+evaluation/unsup_datasets
+evaluation/np
+test_embs
+evaluation/.idea/
+evaluation/embeddings/
