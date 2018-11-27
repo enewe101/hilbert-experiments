@@ -1,0 +1,15 @@
+from os import path
+
+MAIN_MEMORY_DEVICE = 'cpu'
+MATRIX_OPS_DEVICE = 'cuda'
+
+PROJ_DIR = path.abspath(path.join(path.dirname(__file__), '..'))
+
+DATA_DIR = '/home/ndg/projects/shared_datasets/hilbert'
+GIGAWORD_DIR = '/home/rldata/gigaword-corenlp/data'
+LOCAL_GIGAWORD_DIR = path.join(DATA_DIR, 'gigaword-corenlp')
+TOKENIZED_DIR = path.join(DATA_DIR, 'tokenized')
+TOKENIZED_CAT_DIR = path.join(DATA_DIR, 'gigaword_tokenized_cat')
+TOKENIZED_CAT_FULL_PATH = path.join(DATA_DIR, 'gigaword_tokenized_cat', 'gigaword_tokenized_cat.txt')
+COOCCURRENCE_DIR = path.join(DATA_DIR, 'cooccurrence')
+EMBEDDINGS_DIR = path.join(DATA_DIR, 'embeddings')
