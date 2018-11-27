@@ -4,6 +4,7 @@ MAIN_MEMORY_DEVICE = 'cpu'
 MATRIX_OPS_DEVICE = 'cuda'
 
 PROJ_DIR = path.abspath(path.join(path.dirname(__file__), '..'))
+EMBEDDING_CREATION_SRC_DIR = os.path.join(PROJ_DIR, 'embedding_creation')
 
 DATA_DIR = '/home/ndg/projects/shared_datasets/hilbert'
 GIGAWORD_DIR = '/home/rldata/gigaword-corenlp/data'
