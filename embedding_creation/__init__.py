@@ -1,5 +1,5 @@
 import embedding_creation.make
-import embedding_creation.glove
-import embedding_creation.w2v
-import embedding_creation.w2v_simulation
+import embedding_creation.std_glv
+import embedding_creation.std_w2v
+import embedding_creation.hbt_w2v
 import embedding_creation.CONSTANTS

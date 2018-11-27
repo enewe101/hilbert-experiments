@@ -126,7 +126,7 @@ class TestSampling(TestCase):
         bigram = h.bigram.Bigram(unigram)
         sampler = dp.bigram_sampler.SamplerW2V(bigram, window, thresh)
 
-        found_count_prob = sampler.get_count_prob_right_low_mem(drop_probs)
+        found_count_prob = sampler.get_count_prob_right(drop_probs)
         expected_count_prob = np.load(os.path.join(
             dp.CONSTANTS.TEST_DATA_DIR, 'count_probabilities.npy'))
         self.assertTrue(np.allclose(found_count_prob, expected_count_prob))
@@ -157,11 +157,9 @@ class TestSampling(TestCase):
         ])
         bigram = h.bigram.Bigram(unigram)
         sampler = dp.bigram_sampler.SamplerW2V(bigram, window, thresh)
-        #sampler.sample(tokens)
-        sampler.sample_low_mem(tokens)
+        sampler.sample(tokens)
         self.assertTrue(
             np.allclose(bigram.Nxx.toarray(), expected_cooccurrences))
-
 
         # Now set the threshold so that some tokens get dropped.  Simulate
         # many replicates of the w2v dynamic sampling, and check that the
@@ -197,7 +195,7 @@ class TestSampling(TestCase):
 
         # Use the sampler to get bigram counts.
         #sampler.sample(tokens)
-        sampler.sample_low_mem(tokens)
+        sampler.sample(tokens)
 
         self.assertTrue(np.allclose(
             bigram.Nxx.toarray(), mean_weight, atol=0.05))
@@ -230,6 +228,7 @@ class CoocStatsMock:
         self.counts[token1, token2] += count
 
 
+# TODO: test extract_unigram_and_bigram()
 class TestBigramExtraction(TestCase):
 
     def test_extract_bigram(self):
@@ -284,7 +283,6 @@ class TestBigramExtraction(TestCase):
                     expected_counts[token1, token2]
                 )
 
-
         # Test dynamic weight
         expected_counts = Counter()
         random.seed(0)
@@ -296,7 +294,6 @@ class TestBigramExtraction(TestCase):
                     d = abs(i-j)
                     weight = (window - d + 1) / window
                     expected_counts[doc[i],doc[j]] += weight
-
 
         thresh = 1 # Disables common-word undersampling
         bigram = h.bigram.Bigram(unigram)
