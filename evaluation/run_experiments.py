@@ -20,7 +20,7 @@ def cossim(v1, v2):
 
 
 # Beginning of our experimental code.
-def similarity_exp(embs, hdataset, hparams, avg_vw=False):
+def similarity_exp(embs, hdataset, hparams, avg_vw=False, verbose=True):
     """
     Runs all 11 of the word similarity experiments on the set of
     embeddings passed to it.
@@ -28,12 +28,14 @@ def similarity_exp(embs, hdataset, hparams, avg_vw=False):
     :param hdataset: HilbertDataset object
     :param hparams: unused - kept for interface functionality
     :param avg_vw: set to True to average the vectors and covectors together
+    :param verbose: print or not
     :return: ResultsHolder object
     """
     results = ResultsHolder(SIMILARITY)
 
     # for showing over time
-    print('Running similarity experiments')
+    if verbose:
+        print('Running similarity experiments')
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
