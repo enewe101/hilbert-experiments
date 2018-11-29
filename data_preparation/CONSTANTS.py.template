@@ -1,0 +1,8 @@
+import os.path as path
+import shared
+DATA_PREPARATION_SRC_DIR = path.join(
+    shared.CONSTANTS.PROJ_DIR, 'data_preparation')
+TEST_DATA_DIR = path.join(DATA_PREPARATION_SRC_DIR, 'test-data')
+TEST_DOCS_DIR = path.join(TEST_DATA_DIR, 'test-docs')
+TEST_WRITE_DIR = path.join(TEST_DATA_DIR, 'test-write')
+TOKENIZED_CAT_TEST_PATH = path.join(TEST_DATA_DIR, 'tokenized-cat-test.txt')

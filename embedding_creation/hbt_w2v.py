@@ -34,6 +34,9 @@ def run_w2v(
     iters_per_epoch=100,
     epochs=100,
 
+    # Debug Option
+    small=False,
+
     # Embedder Options
     k=15,
     alpha=3./4,
@@ -43,6 +46,7 @@ def run_w2v(
     solver='sgd',
     shard_factor=1,
     learning_rate=1e-5,
+    scheduler='constant',
     verbose=True,
     device=None,
 ):
@@ -51,6 +55,8 @@ def run_w2v(
         if None, use random embeddings.
     """
 
+    if small:
+        print('small not yet implemented')
     print(update_density)
 
     # Set the random seed.
@@ -79,6 +85,7 @@ def run_w2v(
         solver=solver,
         shard_factor=shard_factor,
         learning_rate=learning_rate,
+        scheduler=scheduler,
         init_vecs=init_vecs,
         verbose=verbose,
         device=device
@@ -108,8 +115,9 @@ def run_w2v(
                 'iter-{}'.format(iters_per_epoch * epoch)
             )
             embeddings.save(embeddings_save_path)
-            trace_file.write('iter\t{}\tloss\t{}\n'.format(
-                iters_per_epoch * epoch, embedder.badness
+            trace_file.write('iter\t{}learning_rate\t{}\tloss\t{}\n'.format(
+                iters_per_epoch * epoch, embedder.learning_rate, 
+                embedder.badness
             ))
 
     return embedder, solver
@@ -193,6 +201,15 @@ if __name__ == '__main__':
         '--update-density', '-u', type=float, default=1, 
         help="density of random bitmask applied to Delta before update"
     )
+    parser.add_argument(
+        '--scheduler', '-L', choices=['plateau', 'constant'], 
+        default='constant', help="whether to use a scheduled learning rate"
+    )
+    parser.add_argument(
+        '--small', '-m',  action="store_true", 
+        help="run with a small mock bigram."
+    )
+
 
     # Parse the arguments
     args = vars(parser.parse_args())

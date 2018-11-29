@@ -1,0 +1,8 @@
+import shared
+import os.path as path
+EMBEDDING_CREATION_SRC_DIR = path.join(
+    shared.CONSTANTS.PROJ_DIR, 'embedding_creation')
+LOCAL_GLOVE_EXECUTABLE_PATH = path.join(EMBEDDING_CREATION_SRC_DIR, 'glove.sh')
+GLOVE_EXECUTABLE_PATH = path.join('/home/ndg/users/enewel3/GloVe/build')
+#LOCAL_W2V_EXECUTABLE_PATH = path.join(EMBEDDING_CREATION_SRC_DIR, 'w2v.sh')
+W2V_EXECUTABLE_PATH = path.join('/home/ndg/users/enewel3/word2vec/word2vec-en')
