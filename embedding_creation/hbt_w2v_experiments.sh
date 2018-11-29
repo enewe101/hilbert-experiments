@@ -36,6 +36,24 @@ hbt_w2v_path=$(python -c 'import embedding_creation; print(embedding_creation.CO
 
 #python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-tc2e6-v10k-u1-I1000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-6 -t 2.45e-6 -I 1000 -u 0.01
 
-python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-t1-v10k-u10-I500 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-9 -t 1 -I 500 -u 0.1
+#python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-t1-v10k-u10-I500 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-9 -t 1 -I 500 -u 0.1
+#
+#python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-t1-v10k-u1-I1000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-8 -t 1 -I 1000 -u 0.01
 
-python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-t1-v10k-u1-I1000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-8 -t 1 -I 1000 -u 0.01
+
+
+
+
+
+
+
+python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-tc2e5-v10k-u1-l1e6-I2000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-6 -t 2.45e-5 -I 2000 -u 0.01
+
+python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-tc2e5-v10k-u0.1-l1e5-I3000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-5 -t 2.45e-5 -I 3000 -u 0.001
+
+python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-tc2e5-v10k-u0.01-l1e6-I5000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-5 -t 2.45e-5 -I 5000 -u 0.0001
+
+python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-t1-v10k-u0.1-l1e8-I3000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-8 -t 1 -I 3000 -u 0.001
+
+python $hbt_w2v_path -b 5w-dynamic-10k/thresh1 -o hbt-w2v-s1-t1-v10k-u0.01-l1e8-I5000 -i std-w2v-s1-t1-v10k-iter5/vectors-init -S 1 -s sgd -l 1e-8 -t 1 -I 5000 -u 0.0001
+
