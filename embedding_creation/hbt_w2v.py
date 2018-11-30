@@ -46,7 +46,6 @@ def run_w2v(
     solver='sgd',
     shard_factor=1,
     learning_rate=1e-5,
-    scheduler='constant',
     verbose=True,
     device=None,
 ):
@@ -85,7 +84,6 @@ def run_w2v(
         solver=solver,
         shard_factor=shard_factor,
         learning_rate=learning_rate,
-        scheduler=scheduler,
         init_vecs=init_vecs,
         verbose=verbose,
         device=device
@@ -200,10 +198,6 @@ if __name__ == '__main__':
     parser.add_argument(
         '--update-density', '-u', type=float, default=1, 
         help="density of random bitmask applied to Delta before update"
-    )
-    parser.add_argument(
-        '--scheduler', '-L', choices=['plateau', 'constant'], 
-        default='constant', help="whether to use a scheduled learning rate"
     )
     parser.add_argument(
         '--small', '-m',  action="store_true", 
