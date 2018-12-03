@@ -24,3 +24,5 @@ evaluation/embeddings/
 *.png
 debug/
 old_png.zip
+build
+dist
