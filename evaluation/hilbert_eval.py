@@ -69,7 +69,7 @@ def run_iteration_testing(iter_files, eval_fun, eval_arg, target_results, args):
     # the save path is the base directory of the Hilbert model
     if args.viz or args.save:
         save_path = '/'.join(iter_files[0][0].split('/')[:-1]) if args.save else ''
-        assert not args.save or (args.save and '/hbt-' in save_path)
+        assert not args.save or (args.save and 'hbt-' in save_path)
         plot_performance(iter_results, iter_epochs, save_path, targs=target_results)
 
     final_results = {args.sample[0]: iter_results[-1]}
@@ -87,12 +87,17 @@ def evaluate_embs(path, dataset, avg_vw=False):
             pass
     if dataset.name == 'similarity':
         embs = load_embeddings_as_hilbert(path)
-        results = similarity_exp(embs, dataset, None, avg_vw=avg_vw)
+        if any(np.isnan(embs[0])):
+            results = None
+            print(f'Warning! NAN for {path}')
+        else:
+            results = similarity_exp(embs, dataset, None, avg_vw=avg_vw)
     else:
         raise NotImplementedError(f'Lazy, did not implement results for \"{dataset.name}\"!')
 
     print(f'{path} - running similarity exp...')
-    np.save(f'{path}/{dataset.name}', np.array([results]))
+    nancheck = '_NAN' if results is None else ''
+    np.save(f'{path}/{dataset.name}{nancheck}', np.array([results]))
     return results
 
 
