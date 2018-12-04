@@ -38,5 +38,8 @@ setup(
     packages=['data_preparation', 'embedding_creation', 'shared', 'evaluation'],
 	#indlude_package_data=True,
 	package_data={'': ['README.md']},
-	install_requires=['corenlpy', 'scipy', 'hilbert', 'nltk', 'sklearn-crfsuite', 'progress']
+	install_requires=[
+        #'corenlpy', 
+        'scipy', 'hilbert', 'nltk', 'sklearn-crfsuite', 'progress'
+    ]
 )
