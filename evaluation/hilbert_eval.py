@@ -91,7 +91,11 @@ def evaluate_embs(path, dataset, avg_vw=False):
             results = None
             print(f'Warning! NAN for {path}')
         else:
-            results = similarity_exp(embs, dataset, None, avg_vw=avg_vw)
+            try:
+                results = similarity_exp(embs, dataset, None, avg_vw=avg_vw)
+            except ValueError:
+                print('NAN results')
+                results = None
     else:
         raise NotImplementedError(f'Lazy, did not implement results for \"{dataset.name}\"!')
 
@@ -316,9 +320,11 @@ def main():
 
     # do an arg check
     if 'glv' in args.sample[0] and not args.glove_avg:
+        args.glove_avg = True
         print('\n\n-----------WARNING----------')
         print('You are NOT averaging vectors and covectors, but you ARE using Glove!')
         print('You should probably be passing the -G argument in this case!\n\n')
+        print('DEFAULT BEHAVIOR is to AVERAGE THEM ANYWAY!')
 
     # check if we want to do SVD
     if args.svd:
