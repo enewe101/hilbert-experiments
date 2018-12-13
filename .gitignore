@@ -27,3 +27,5 @@ debug/
 old_png.zip
 build
 dist
+results
+embedding_creation/old_exps
