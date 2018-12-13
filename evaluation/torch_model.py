@@ -36,8 +36,7 @@ class EmbeddingModel(nn.Module):
         # combine them all
         _all_embs = torch.cat((h_embs.V.float(),
                                h_embs.unk.float().reshape(1, -1),
-                               _padding),
-                              dim=0).to(HParams.DEVICE)
+                               _padding), dim=0).to(HParams.DEVICE)
 
         # now, put the pretrained ones into them
         self.torch_padding_id = torch.LongTensor([self.padding_id]).to(HParams.DEVICE)
@@ -45,7 +44,7 @@ class EmbeddingModel(nn.Module):
         # if we want to use zero padding we need this kwarg
         _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
         self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(HParams.DEVICE)
-        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=False)
+        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=True)
         self.emb_dim = _dim
 
 
@@ -147,7 +146,7 @@ class FFNN(EmbeddingPooler):
     def __init__(self, h_embs, n_classes, hdim1, hdim2,
                  dropout=0.,
                  use_vectors=True,
-                 pooling='mean'):
+                 pooling='max'):
         super(FFNN, self).__init__(h_embs, use_vectors=use_vectors, pooling=pooling)
         assert hdim1 > 0 and hdim2 > 0
 
