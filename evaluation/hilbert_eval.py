@@ -33,7 +33,7 @@ def get_all_iters(path):
 def get_evalfun_and_arg(run_eval):
     if run_eval:
         print('Loading datasets for running tasks...')
-        h_datasets = np.load('np/all_data.npz')['arr_0'][0]
+        h_datasets = np.load('/home/kiankd/naacl2019/hilbert-experiments/evaluation/np/all_data.npz')['arr_0'][0]
         simds = h_datasets['similarity']
         eval_fun, eval_arg = evaluate_embs, simds
     else:
