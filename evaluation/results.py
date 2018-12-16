@@ -28,6 +28,14 @@ class ResultsHolder(object):
         self.results_by_dataset[ds_name] = results_dict
         self.result_keys.update(results_dict.keys())
 
+    def values(self):
+        return self.results_by_dataset.values()
+
+    def keys(self):
+        return self.results_by_dataset.keys()
+
+    def items(self):
+        return self.results_by_dataset.items()
 
     def pretty_print(self):
         print('Results on {}...'.format(self.name))
