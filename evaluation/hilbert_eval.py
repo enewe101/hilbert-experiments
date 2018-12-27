@@ -61,13 +61,16 @@ def load_embeddings_as_hilbert(path, verbose=True):
 def get_best(epochs_res):
     best = -100
     beste = -1
+    bestresd = None
     for epoch, resd in epochs_res:
         score = np.mean([x['full-spearman'] for x in resd.values()])
         if score > best:
             best = score
             beste = epoch
+            bestresd = resd
     print('BEST EPOCH: {}'.format(beste))
     print('Got score: {}'.format(best))
+    return bestresd
 
 
 def run_iteration_testing(iter_files, eval_fun, eval_arg, target_results, args):
@@ -172,7 +175,7 @@ def compare_finals(final_res_dict, target_res, save_path='', reskey='full-spearm
     models = list(final_res_dict.keys())
 
     # now get the datasets
-    datasets = list(final_res_dict[models[0]].results_by_dataset.keys())
+    datasets = list(final_res_dict[models[0]].keys())
     index = np.arange(len(datasets))
 
     # to compares

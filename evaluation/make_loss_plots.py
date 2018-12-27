@@ -38,12 +38,12 @@ def filter_by_lr(keys):
     lrd = defaultdict(lambda: [])
     for k in keys:
         # example: auto-hbt-glv-v10k-u1e05-l5e02-sadam
-        lr_s = re.search(r'-l[^-]*-', k).group(0)
-        lr = lr_s.lstrip('-l').rstrip('-').replace('e', 'e-')
+        lr_s = re.search(r'-l[^-]*', k).group(0)
+        lr = lr_s.lstrip('-l').replace('e', 'e-').replace('p', '.')
         lr = float(lr)
         
-        mb_s = re.search(r'-u[^-]*-', k).group(0)
-        mb = mb_s.lstrip('-u').rstrip('-').replace('e', 'e-')
+        mb_s = re.search(r'-u[^-]*', k).group(0)
+        mb = mb_s.lstrip('-u').replace('e', 'e-').replace('p', '.')
         mb = float(mb)
 
         lrd[lr].append((k, mb, lr,))
