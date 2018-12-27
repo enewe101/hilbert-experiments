@@ -1,4 +1,6 @@
+import random
 import numpy as np
+import time
 import hilbert as h
 
 # TODOS:
@@ -9,18 +11,22 @@ def get_sampler(
     name, 
     bigram,
     window,
-    thresh=None,
+    min_count=1,
+    thresh=1,
 ):
+
     if name == 'flat':
         return SamplerFlat(bigram, window)
     elif name == 'harmonic':
         return SamplerHarmonic(bigram, window)
     elif name == 'w2v':
         return SamplerW2V(bigram, window, thresh)
+    elif name == 'dynamic':
+        return SamplerDynamic(bigram, window, min_count)
     else:
         raise ValueError(
             "Unexpected sampler type {}.  Expected 'flat', 'harmonic', "
-            "or 'w2v'.".format(repr(name))
+            "'dynamic', or 'w2v'.".format(repr(name))
         )
 
 
@@ -51,6 +57,39 @@ class SamplerHarmonic:
                     continue
                 self.bigram.add(
                     tokens[i], tokens[j], count=1.0/abs(i-j), skip_unk=True)
+
+
+
+
+class SamplerDynamic:
+
+    def __init__(self, bigram, window, min_count=None):
+        self.bigram = bigram
+        self.window = window
+        self.min_count = min_count
+
+
+    def sample(self, tokens):
+
+        tokens = [
+            self.bigram.dictionary.get_id(t) for t in tokens 
+            if t in self.bigram.dictionary 
+            and (
+                self.min_count is None 
+                or self.bigram.unigram.count(t) >= self.min_count
+            )
+        ]
+
+        # Cooccurrences are weighted based on distance.
+        for offset in range(1, self.window+1):
+            focal_ids = tokens[:-offset] + tokens[offset:]
+            context_ids = tokens[offset:] + tokens[:-offset] 
+            weight = (self.window - offset + 1) / self.window
+            self.bigram.add_id(focal_ids, context_ids, weight)
+
+        return
+
+
 
 
 # TODO: min_count should no longer be handled here.  Instead, the unigram
@@ -156,8 +195,12 @@ class SamplerW2V:
                 prob = 0
             else:
                 prob = (freq - self.thresh) / freq - (self.thresh / freq)**.5
-            drop_probabilities[i] = h.utils.clip(0,1,prob)
+            drop_probabilities[i] = clip(0,1,prob)
         return drop_probabilities
 
+
+def clip(minimum, maximum, val):
+    val = min(val, maximum)
+    return max(val, minimum)
 
 
