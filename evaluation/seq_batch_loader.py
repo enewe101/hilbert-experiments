@@ -6,7 +6,7 @@ PAD_LABEL = -1
 
 class SequenceLoader(object):
 
-    def __init__(self, X_seqs, y_labels, mb_size, vocab_size, seq_labelling=False):
+    def __init__(self, X_seqs, y_labels, mb_size, padding_id, seq_labelling=False):
 
         # needs to be pre-sorted in decreasing order
         assert len(X_seqs[0]) > len(X_seqs[-1])
@@ -24,7 +24,7 @@ class SequenceLoader(object):
 
             # add the sentences with the padding
             pads = crt_max_len - len(sent)
-            padding = [vocab_size] * pads
+            padding = [padding_id] * pads
             padded_sent = sent + padding
             X_batches[-1].append(padded_sent)
             X_batch_pads[-1].append(pads)

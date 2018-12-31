@@ -48,6 +48,10 @@ class EmbeddingModel(nn.Module):
         self.emb_dim = _dim
 
 
+    def forward(self, token_seqs):
+        return self.embeddings(token_seqs)
+
+
     def get_padding_vec(self):
         return self.embeddings(self.torch_padding_id).reshape(self.emb_dim)
 
@@ -67,7 +71,8 @@ class EmbeddingPooler(EmbeddingModel):
         self.do_max = self.pooling == 'both' or self.pooling == 'max'
 
 
-    def forward(self, embs, pads):
+    def forward(self, token_seqs, pads=None):
+        embs = super(EmbeddingPooler, self).forward(token_seqs)
 
         # shape of embs is batch_size X max_seq_length X embedding_dim
         mb_size, max_len, emb_dim = embs.shape
@@ -111,8 +116,8 @@ class LogisticRegression(EmbeddingPooler):
         self.output = nn.Linear(in_features, n_classes)
 
 
-    def forward(self, embs, pads):
-        pooled_embs = super(LogisticRegression, self).forward(embs, pads)
+    def forward(self, token_seqs, pads=None):
+        pooled_embs = super(LogisticRegression, self).forward(token_seqs, pads)
         return self.output(pooled_embs)
 
 
@@ -139,8 +144,8 @@ class FFNN(EmbeddingPooler):
             nn.Linear(hdim2, n_classes)
         )
 
-    def forward(self, embs, pads):
-        pooled_embs = super(FFNN, self).forward(embs, pads)
+    def forward(self, token_seqs, pads=None):
+        pooled_embs = super(FFNN, self).forward(token_seqs, pads)
         return self.model(pooled_embs)
 
 
@@ -177,7 +182,9 @@ class BiLSTMClassifier(EmbeddingModel):
         return hstate, cstate
 
 
-    def forward(self, emb_seqs, pads):
+    def forward(self, token_seqs, pads=None):
+        # get the tensor with emb sequences, along with the number of pads in each seq
+        emb_seqs = super(BiLSTMClassifier, self).forward(token_seqs)
 
         # now we gotta do some special packing
         # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)
