@@ -33,7 +33,8 @@ def get_all_iters(path):
 def get_evalfun_and_arg(run_eval):
     if run_eval:
         print('Loading datasets for running tasks...')
-        h_datasets = np.load('np/all_data.npz')['arr_0'][0]
+        h_datasets = np.load('/home/kiankd/naacl2019/'
+                'hilbert-experiments/evaluation/np/all_data.npz')['arr_0'][0]
         simds = h_datasets['similarity']
         eval_fun, eval_arg = evaluate_embs, simds
     else:
@@ -57,14 +58,27 @@ def load_embeddings_as_hilbert(path, verbose=True):
         print('Loading regular embeddings...')
     return load_embeddings(path)
 
+def get_best(epochs_res):
+    best = -100
+    beste = -1
+    bestresd = None
+    for epoch, resd in epochs_res:
+        score = np.mean([x['full-spearman'] for x in resd.values()])
+        if score > best:
+            best = score
+            beste = epoch
+            bestresd = resd
+    print('BEST EPOCH: {}'.format(beste))
+    print('Got score: {}'.format(best))
+    return bestresd
+
+
 def run_iteration_testing(iter_files, eval_fun, eval_arg, target_results, args):
     iter_epochs = []
     iter_results = []
-    comparison_results = {}
     for path, epoch in iter_files:
         iter_results.append(eval_fun(path, eval_arg))
         iter_epochs.append(epoch)
-        comparison_results[path] = iter_results[-1]
 
     # the save path is the base directory of the Hilbert model
     if args.viz or args.save:
@@ -72,7 +86,7 @@ def run_iteration_testing(iter_files, eval_fun, eval_arg, target_results, args):
         assert not args.save or (args.save and 'hbt-' in save_path)
         plot_performance(iter_results, iter_epochs, save_path, targs=target_results)
 
-    final_results = {args.sample[0]: iter_results[-1]}
+    final_results = {args.sample[0]: get_best(zip(iter_epochs, iter_results))}
     return final_results
 #---------      ----------#
 ########## /end ###########
@@ -161,7 +175,7 @@ def compare_finals(final_res_dict, target_res, save_path='', reskey='full-spearm
     models = list(final_res_dict.keys())
 
     # now get the datasets
-    datasets = list(final_res_dict[models[0]].results_by_dataset.keys())
+    datasets = list(final_res_dict[models[0]].keys())
     index = np.arange(len(datasets))
 
     # to compares
