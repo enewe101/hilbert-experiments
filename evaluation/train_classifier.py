@@ -20,7 +20,7 @@ def iter_mb(x, y, minibatch_size):
     for i in range((len(x) // minibatch_size) + 1):
         seqs = x[i * minibatch_size: (i + 1) * minibatch_size]
         labels = y[i * minibatch_size: (i + 1) * minibatch_size]
-        yield seqs, torch.LongTensor(labels).to(HParams.DEVICE)
+        yield seqs, labels
 
 
 def feed_full_ds(neural_model, minibatch_size, x, y):
@@ -64,6 +64,14 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
     tr_x, tr_y = sort_by_length(tr_x, tr_y, reverse=True)
     val_x, val_y = sort_by_length(val_x, val_y, reverse=True)
     te_x, te_y = sort_by_length(te_x, te_y, reverse=True)
+
+    # push everything onto the GPU (hopefully it all fits!)
+    tr_x = torch.LongTensor(tr_x).to(HParams.DEVICE)
+    tr_y = torch.LongTensor(tr_y).to(HParams.DEVICE)
+    val_x = torch.LongTensor(val_x).to(HParams.DEVICE)
+    val_y = torch.LongTensor(val_y).to(HParams.DEVICE)
+    te_x = torch.LongTensor(te_x).to(HParams.DEVICE)
+    te_y = torch.LongTensor(te_y).to(HParams.DEVICE)
 
     # initialize torch things
     model = classifier_constr(h_embs, **kw_params).to(HParams.DEVICE)

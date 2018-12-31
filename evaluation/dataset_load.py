@@ -156,7 +156,6 @@ class HilbertDataset(object):
                 else:
                     labs_idx.append(self.labels_to_idx[yval])
 
-
             # return all the indexed boys
             return toks_idx, labs_idx
 
