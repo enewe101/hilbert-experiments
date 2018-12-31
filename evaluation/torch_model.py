@@ -48,30 +48,6 @@ class EmbeddingModel(nn.Module):
         self.emb_dim = _dim
 
 
-    def forward(self, sorted_tok_ids):
-        """
-        :param sorted_tok_ids: sorted by length list of lists of tokens
-        :return: tensor of embeddings, with padding, for a downstream model
-        """
-        # must be sorted by length on input, either increasing or decreasing
-        max_len = max(len(sorted_tok_ids[0]), len(sorted_tok_ids[-1]))
-
-        ids = [] # the actual token ids
-        pads = [] # store number of pads in each thing
-        for tok_ids in sorted_tok_ids:
-
-            # add the padding and add the ids
-            ids.append(tok_ids + [self.padding_id] * (max_len - len(tok_ids)))
-            pads.append(max_len - len(tok_ids)) # number of paddings appended
-
-        # now convert to long tensors
-        torch_ids = torch.LongTensor(ids).to(HParams.DEVICE)
-        torch_pads = torch.LongTensor(pads).to(HParams.DEVICE)
-
-        # now finally yield the sequence of embeddings
-        return self.embeddings(torch_ids), torch_pads
-
-
     def get_padding_vec(self):
         return self.embeddings(self.torch_padding_id).reshape(self.emb_dim)
 
@@ -91,8 +67,7 @@ class EmbeddingPooler(EmbeddingModel):
         self.do_max = self.pooling == 'both' or self.pooling == 'max'
 
 
-    def forward(self, token_minibatch):
-        embs, pads = super(EmbeddingPooler, self).forward(token_minibatch)
+    def forward(self, embs, pads):
 
         # shape of embs is batch_size X max_seq_length X embedding_dim
         mb_size, max_len, emb_dim = embs.shape
@@ -136,8 +111,8 @@ class LogisticRegression(EmbeddingPooler):
         self.output = nn.Linear(in_features, n_classes)
 
 
-    def forward(self, token_minibatch):
-        pooled_embs = super(LogisticRegression, self).forward(token_minibatch)
+    def forward(self, embs, pads):
+        pooled_embs = super(LogisticRegression, self).forward(embs, pads)
         return self.output(pooled_embs)
 
 
@@ -164,8 +139,8 @@ class FFNN(EmbeddingPooler):
             nn.Linear(hdim2, n_classes)
         )
 
-    def forward(self, token_minibatch):
-        pooled_embs = super(FFNN, self).forward(token_minibatch)
+    def forward(self, embs, pads):
+        pooled_embs = super(FFNN, self).forward(embs, pads)
         return self.model(pooled_embs)
 
 
@@ -202,9 +177,7 @@ class BiLSTMClassifier(EmbeddingModel):
         return hstate, cstate
 
 
-    def forward(self, sorted_tok_ids):
-        # get the tensor with emb sequences, along with the number of pads in each seq
-        emb_seqs, pads = super(BiLSTMClassifier, self).forward(sorted_tok_ids)
+    def forward(self, emb_seqs, pads):
 
         # now we gotta do some special packing
         # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)
