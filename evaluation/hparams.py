@@ -30,7 +30,7 @@ class HParams(object):
                             help='make RNN gradient have max norm equal to 1')
         parser.add_argument('--schedule_lr', action='store_true', default=False,
                             help='flag to use a scheduled learning rate')
-        parser.add_argument('--model_str', type=str, choices=['ffnn', 'logreg'],
+        parser.add_argument('--model_str', type=str, choices=['ffnn', 'logreg', 'bilstm'],
                             help='model string for when model selection is applicable')
         args = parser.parse_args()
 

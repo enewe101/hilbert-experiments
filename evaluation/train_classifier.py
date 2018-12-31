@@ -61,9 +61,9 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
     )
 
     # sort the datasets by length of the sentences, very useful
-    tr_x, tr_y = sort_by_length(tr_x, tr_y)
-    val_x, val_y = sort_by_length(val_x, val_y)
-    te_x, te_y = sort_by_length(te_x, te_y)
+    tr_x, tr_y = sort_by_length(tr_x, tr_y, reverse=True)
+    val_x, val_y = sort_by_length(val_x, val_y, reverse=True)
+    te_x, te_y = sort_by_length(te_x, te_y, reverse=True)
 
     # initialize torch things
     model = classifier_constr(h_embs, **kw_params).to(HParams.DEVICE)
@@ -94,6 +94,7 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
         if verbose: print('\nEpoch {}: (training)'.format(e))
 
         # training set iteration
+        model.train()
         training_loss = 0
         optimizer.zero_grad()
 

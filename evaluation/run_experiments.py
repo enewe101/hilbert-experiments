@@ -226,12 +226,12 @@ def classification_exp(embs, hdataset, hparams):
     neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
 
     # special parameters for a FFNN
-    if hparams.model_str == 'ffnn':
+    if hparams.model_str.lower() == 'ffnn':
         neural_kwargs.update({'hdim1': hparams.hdim1,
                               'hdim2': hparams.hdim2,
                               'dropout': hparams.dropout})
 
-    elif hparams.model_str ==' bilstm':
+    elif hparams.model_str.lower() == 'bilstm':
         neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
                               'n_layers': hparams.n_layers,
                               'dropout': hparams.dropout})
@@ -256,7 +256,6 @@ def classification_exp(embs, hdataset, hparams):
 
 #### utility functions ###
 def load_embeddings(path, device=None):
-    import pdb; pdb.set_trace()
     e = hilbert.embeddings.Embeddings.load(path,
             device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
