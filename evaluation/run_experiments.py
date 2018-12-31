@@ -7,7 +7,7 @@ from progress.bar import IncrementalBar
 from dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
-from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM
+from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier
 from evaluation.constants import *
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
@@ -217,6 +217,8 @@ def classification_exp(embs, hdataset, hparams):
         neural_constructor = FFNN
     elif hparams.model_str.lower() == 'logreg':
         neural_constructor = LogisticRegression
+    elif hparams.model_str.lower() == 'bilstm':
+        neural_constructor = BiLSTMClassifier
     else:
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(hparams.model_str))
@@ -229,6 +231,12 @@ def classification_exp(embs, hdataset, hparams):
                               'hdim2': hparams.hdim2,
                               'dropout': hparams.dropout})
 
+    elif hparams.model_str ==' bilstm':
+        neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
+                              'n_layers': hparams.n_layers,
+                              'dropout': hparams.dropout})
+
+    # run the model!
     results = train_classifier(hdataset.name,
                                embs,
                                neural_constructor,
@@ -248,6 +256,7 @@ def classification_exp(embs, hdataset, hparams):
 
 #### utility functions ###
 def load_embeddings(path, device=None):
+    import pdb; pdb.set_trace()
     e = hilbert.embeddings.Embeddings.load(path,
             device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
