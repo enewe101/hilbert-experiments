@@ -63,8 +63,8 @@ class EmbeddingPooler(EmbeddingModel):
     - it pools together word embeddings according to either mean
     pooling, max pooling, or both. It ignores padding.
     """
-    def __init__(self, h_embs, use_vectors=True, pooling='mean'):
-        super(EmbeddingPooler, self).__init__(h_embs, use_vectors)
+    def __init__(self, h_embs, pooling='mean', **kwargs):
+        super(EmbeddingPooler, self).__init__(h_embs, **kwargs)
         self.pooling = pooling
         self.do_mean = self.pooling == 'both' or self.pooling == 'mean'
         self.do_max = self.pooling == 'both' or self.pooling == 'max'
@@ -106,9 +106,9 @@ class EmbeddingPooler(EmbeddingModel):
 
 # classes for the actual learning models
 class LogisticRegression(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, use_vectors=True, pooling='mean'):
+    def __init__(self, h_embs, n_classes, pooling='mean', **kwargs):
         super(LogisticRegression, self).__init__(
-            h_embs, use_vectors=use_vectors, pooling=pooling)
+            h_embs, pooling=pooling, **kwargs)
 
         # number of input features
         in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
@@ -123,11 +123,8 @@ class LogisticRegression(EmbeddingPooler):
 
 # Basic FNN for classification on pooled word embeddings
 class FFNN(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, hdim1, hdim2,
-                 dropout=0.,
-                 use_vectors=True,
-                 pooling='max'):
-        super(FFNN, self).__init__(h_embs, use_vectors=use_vectors, pooling=pooling)
+    def __init__(self, h_embs, n_classes, hdim1, hdim2, dropout=0., pooling='max', **kwargs):
+        super(FFNN, self).__init__(h_embs, pooling=pooling, **kwargs)
         assert hdim1 > 0 and hdim2 > 0
 
         # number of input features
@@ -152,8 +149,8 @@ class FFNN(EmbeddingPooler):
 # Basic BiLSTM for classification of word sequences.
 class BiLSTMClassifier(EmbeddingModel):
 
-    def __init__(self, h_embs, n_classes, rnn_hdim, n_layers=1, use_vectors=True, dropout=0):
-        super(BiLSTMClassifier, self).__init__(h_embs, use_vectors=use_vectors, zero_padding=True)
+    def __init__(self, h_embs, n_classes, rnn_hdim, n_layers=1, dropout=0, **kwargs):
+        super(BiLSTMClassifier, self).__init__(h_embs, zero_padding=True, **kwargs)
         assert rnn_hdim > 0 and n_classes > 0 and n_layers > 0
 
         self.hidden_dim = rnn_hdim
@@ -214,12 +211,9 @@ class SeqLabLSTM(EmbeddingModel):
 
 
     # extends the EmbeddingModel class which uses our pretrained embeddings.
-    def __init__(self, h_embs, n_labels, rnn_hdim,
-                 n_layers=1,
-                 use_vectors=True,
-                 bidirectional=True,
-                 dropout=0):
-        super(SeqLabLSTM, self).__init__(h_embs, use_vectors=use_vectors, zero_padding=True)
+    def __init__(self, h_embs, n_labels, rnn_hdim, n_layers=1,
+                 bidirectional=True, dropout=0, **kwargs):
+        super(SeqLabLSTM, self).__init__(h_embs, zero_padding=True, **kwargs)
         assert rnn_hdim > 0 and n_labels > 0 and n_layers > 0
 
         self.hidden_dim = rnn_hdim
