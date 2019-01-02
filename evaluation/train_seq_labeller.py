@@ -14,21 +14,13 @@ from evaluation.seq_batch_loader import SequenceLoader
 MAX_MB_SIZE = 1024
 
 
-def iter_seq_mb(x, y, minibatch_size):
-    for i in range((len(x) // minibatch_size) + 1):
-        seqs = x[i * minibatch_size: (i + 1) * minibatch_size]
-        labels = y[i * minibatch_size: (i + 1) * minibatch_size]
-        if len(seqs) and len(labels):
-            yield seqs, labels
-
-
 def feed_full_seq_ds(neural_model, seqloader):
     # iterate over the dataset to compute the accuracy
     correct, total = 0, 0
     for tok_seqs, pads, label_seq in seqloader:
 
         # get the yhat prediction matrix for each sample in sequence
-        yhat_mat = neural_model(tok_seqs)
+        yhat_mat = neural_model(tok_seqs, pads)
 
         # from that, get the model predictions
         label_preds = neural_model.get_label_predictions(yhat_mat, label_seq)
@@ -37,7 +29,7 @@ def feed_full_seq_ds(neural_model, seqloader):
         label_preds = label_preds[label_preds != SeqLabLSTM.PADDING_LABEL_ID]
 
         # must be same length, if everything went correctly
-        gold_labels = gold_labels[gold_labels != SeqLabLSTM.PADDING_LABEL_ID]
+        gold_labels = label_seq[label_seq != SeqLabLSTM.PADDING_LABEL_ID]
         assert len(label_preds) == len(gold_labels)
 
         # count the correct predictions
@@ -116,7 +108,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
         model.train()
         for tok_seqs, pads, label_seq in tr_loader:
             optimizer.zero_grad()
-            yhat = model(tok_seqs)
+            yhat = model(tok_seqs, pads)
             loss = model.loss(yhat, label_seq)
             loss.backward()
 

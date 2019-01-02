@@ -249,9 +249,9 @@ class SeqLabLSTM(EmbeddingModel):
         return hstate, cstate
 
 
-    def forward(self, sorted_tok_ids):
+    def forward(self, sorted_tok_ids, pads):
         # get the tensor with emb sequences, along with the number of pads in each seq
-        emb_seqs, pads = super(SeqLabLSTM, self).forward(sorted_tok_ids)
+        emb_seqs = super(SeqLabLSTM, self).forward(sorted_tok_ids)
 
         # now we gotta do some special packing
         # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)
