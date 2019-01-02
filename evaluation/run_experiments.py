@@ -180,7 +180,8 @@ def seq_labelling_exp(embs, hdataset, hparams):
     neural_kwargs = {'n_labels': len(hdataset.labels_to_idx),
                      'rnn_hdim': hparams.rnn_hdim,
                      'n_layers': hparams.n_layers,
-                     'dropout': hparams.dropout}
+                     'dropout': hparams.dropout,
+                     'fine_tune': hparams.fine_tune}
 
     results = train_seq_labeller(hdataset.name,
                                  embs,
@@ -223,7 +224,8 @@ def classification_exp(embs, hdataset, hparams):
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(hparams.model_str))
 
-    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
+    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx),
+                     'fine_tune': hparams.fine_tune}
 
     # special parameters for a FFNN
     if hparams.model_str.lower() == 'ffnn':

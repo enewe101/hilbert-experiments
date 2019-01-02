@@ -6,13 +6,12 @@ from evaluation.hparams import HParams
 
 
 # Generic model to feed forward token sequences to embeddings
-# TODO: allow for learning the embeddings from scratch.
 class EmbeddingModel(nn.Module):
     """
     Generic module that stores pre-trained embeddings for any
     other neural model we'll be implementing.
     """
-    def __init__(self, h_embs, use_vectors=True, zero_padding=False):
+    def __init__(self, h_embs, fine_tune=True, use_vectors=True, zero_padding=False):
         super(EmbeddingModel, self).__init__()
 
         if not use_vectors:
@@ -44,7 +43,7 @@ class EmbeddingModel(nn.Module):
         # if we want to use zero padding we need this kwarg
         _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
         self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(HParams.DEVICE)
-        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=True)
+        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=fine_tune)
         self.emb_dim = _dim
 
 

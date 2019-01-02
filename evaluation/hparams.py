@@ -12,6 +12,8 @@ class HParams(object):
                             help='path to the embeddings we want to process')
         parser.add_argument('experiment', type=str, choices=ALL_DS,
                             help='specific experiment to run')
+        parser.add_argument('--fine_tune', action='store_true', default=False,
+                            help='pass to fine tune embeddings from gradient')
         parser.add_argument('--rnn_hdim', type=int, default=128,
                             help='dimensionality of RNN hidden layer')
         parser.add_argument('--n_layers', type=int, default=2,
