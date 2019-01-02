@@ -19,8 +19,8 @@ def sort_by_length(x, y, reverse=False):
 
 def feed_full_ds(neural_model, ds_loader):
     correct = 0
-    for tok_seqs, labels in ds_loader:
-        predictions = neural_model(tok_seqs)
+    for tok_seqs, tok_pads, labels in ds_loader:
+        predictions = neural_model(tok_seqs, tok_pads)
         _, label_preds = torch.max(predictions.data, 1)
         correct += (label_preds == labels).sum().item()
     return correct / ds_loader.n_samples
@@ -64,8 +64,8 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
 
     # push everything onto the GPU (hopefully it all fits!)
     tr_loader = SequenceLoader(tr_x, tr_y, mb_size, model.padding_id)
-    val_loader = SequenceLoader(val_x, val_y, len(val_x), model.padding_id)
-    te_loader = SequenceLoader(te_x, te_y, len(te_x), model.padding_id)
+    val_loader = SequenceLoader(val_x, val_y, MAX_MB_SIZE, model.padding_id)
+    te_loader = SequenceLoader(te_x, te_y, MAX_MB_SIZE, model.padding_id)
 
     # get the big daddy bois
     optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
