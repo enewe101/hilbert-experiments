@@ -3,3 +3,4 @@ import embedding_creation.std_glv
 import embedding_creation.std_w2v
 import embedding_creation.hbt_w2v
 import embedding_creation.CONSTANTS
+import embedding_creation.translate_text_embeddings
