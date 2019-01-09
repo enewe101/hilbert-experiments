@@ -11,13 +11,10 @@ class EmbeddingModel(nn.Module):
     Generic module that stores pre-trained embeddings for any
     other neural model we'll be implementing.
     """
-    def __init__(self, h_embs, fine_tune=True, use_vectors=True, zero_padding=False):
+    def __init__(self, h_embs, fine_tune=True, zero_padding=False):
         super(EmbeddingModel, self).__init__()
 
-        if not use_vectors:
-            raise NotImplementedError('Use of vectors & covectors not implemented!')
-
-        _dim = len(h_embs[0])
+        _dim = h_embs.dim
         _n_embs = len(h_embs.dictionary) + 2 # including unk & padding
 
         # set ids for the two
@@ -33,7 +30,7 @@ class EmbeddingModel(nn.Module):
             )).reshape(1, -1).float().to(HParams.DEVICE)
 
         # combine them all
-        _all_embs = torch.cat((h_embs.V.float(),
+        _all_embs = torch.cat((h_embs.matrix.float(),
                                h_embs.unk.float().reshape(1, -1),
                                _padding), dim=0).to(HParams.DEVICE)
 

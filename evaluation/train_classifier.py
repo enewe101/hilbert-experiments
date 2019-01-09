@@ -62,6 +62,11 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
     # initialize torch things
     model = classifier_constr(h_embs, **kw_params).to(HParams.DEVICE)
 
+    # determine if we are doing complete batch training
+    full_batch_train = mb_size == -1
+    if full_batch_train:
+        mb_size = MAX_MB_SIZE # large minibatches to go fast (but do not exceed the GPU memory)
+
     # push everything onto the GPU (hopefully it all fits!)
     tr_loader = SequenceLoader(tr_x, tr_y, mb_size, model.padding_id)
     val_loader = SequenceLoader(val_x, val_y, MAX_MB_SIZE, model.padding_id)
@@ -83,11 +88,6 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
     best_val_acc = 0
     best_epoch = 0
     early_stop_count = early_stop # if performance doesn't improve for 10 epochs, end it
-
-    # determine if we are doing complete batch training
-    full_batch_train = mb_size == -1
-    if full_batch_train:
-        mb_size = MAX_MB_SIZE # large minibatches to go fast (but do not exceed the GPU memory)
 
     if verbose: print('Beginning training...')
     # now iterate over the epochs
