@@ -41,6 +41,7 @@ def get_evalfun_and_arg(run_eval):
         eval_fun, eval_arg = load_emb_results, 'similarity'
     return eval_fun, eval_arg
 
+
 def load_embeddings_as_hilbert(path, verbose=True):
     global SVD_GAMMA
 
@@ -57,6 +58,7 @@ def load_embeddings_as_hilbert(path, verbose=True):
     if verbose:
         print('Loading regular embeddings...')
     return load_embeddings(path)
+
 
 def get_best(epochs_res):
     best = -100
@@ -101,7 +103,7 @@ def evaluate_embs(path, dataset, avg_vw=False):
             pass
     if dataset.name == 'similarity':
         embs = load_embeddings_as_hilbert(path)
-        if any(np.isnan(embs[0])):
+        if embs.has_nan():
             results = None
             print(f'Warning! NAN for {path}')
         else:

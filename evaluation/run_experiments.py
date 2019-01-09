@@ -43,6 +43,9 @@ class EmbWrapper(object):
     def has_w(self, w):
         return w in self.dictionary
 
+    def has_nan(self):
+        return any(np.isnan(self.matrix[0]))
+
 
 
 # little helper
@@ -311,7 +314,7 @@ def main():
         print(f'Loading embeddings from {emb_path}..')
         emb = load_embeddings(emb_path, avg_vw=hparams.avgvw)
         if hparams.avgvw:
-            print('--averaging vectors and covectors!--')
+            print('-- averaging vectors and covectors --')
 
         names_to_fun = {
             SIMILARITY: similarity_exp,
@@ -327,7 +330,7 @@ def main():
             if hparams.experiment != 'all' and expname != hparams.experiment:
                 continue
             results = exp(emb, datasets[expname], hparams)
-            results.serialize(emb_path)
+            results.serialize(emb_path, hparams.get_params_str())
 
 
 if __name__ == '__main__':

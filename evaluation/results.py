@@ -61,8 +61,10 @@ class ResultsHolder(object):
         newf = '{}_{}{}'.format(self.name, crt+1, self.extension)
         return os.path.join(d, newf)
 
-    def serialize(self, write_dir):
+    def serialize(self, write_dir, params_str):
         res_f = self.get_new_res_f(write_dir)
         with open(res_f, 'w') as f:
+            f.write(params_str)
+            f.write('\n\n')
             f.write(self.get_pretty_string())
 

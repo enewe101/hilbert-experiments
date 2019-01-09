@@ -47,9 +47,11 @@ class HParams(object):
         args = parser.parse_args()
 
         # set the namespace of the HParams with those in the args.
+        self.all_params = {}
         for attr_name, value in vars(args).items():
             if not attr_name.startswith('_'):
                 setattr(self, attr_name, value)
+                self.all_params[attr_name] = value
 
         print('Using device: {}'.format(self.DEVICE.type))
         if args.dry:
@@ -63,4 +65,10 @@ class HParams(object):
         for emb_dir in self.emb_dir:
             yield os.path.join(self.base, emb_dir)
         return
+
+    def get_params_str(self):
+        s = 'Run parameters:\n'
+        for key, value in self.all_params.items():
+            s += f'\t{key}: {value}\n'
+        return s
 
