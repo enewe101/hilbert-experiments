@@ -2,6 +2,7 @@ import os
 import shutil
 import random
 from collections import Counter
+import copy
 
 import numpy as np
 from scipy import sparse
@@ -17,82 +18,6 @@ logging.captureWarnings(True)
 
 
 
-
-#
-#   Path iteration is not really needed any more.
-#
-#class TestPathIteration(TestCase):
-#
-#    def test_iter_gigaword_fnames_in_sector(self):
-#        expected_fname_path = os.path.join(
-#            dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
-#        with open(expected_fname_path) as f:
-#            expected_fnames = f.read().split()
-#        expected_fnames = { ('000', fname) for fname in expected_fnames }
-#        found_fnames = set(
-#            dp.path_iteration.iter_gigaword_fnames_in_sector('000'))
-#        self.assertEqual(found_fnames, expected_fnames)
-#
-#
-#    def test_iter_gigaword_paths_in_sector(self):
-#        expected_fname_path = os.path.join(
-#            dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
-#        with open(expected_fname_path) as f:
-#            expected_fnames = f.read().split()
-#        expected_paths = {
-#            dp.path_iteration.get_gigaword_path('000', fname)
-#            for fname in expected_fnames
-#        }
-#        found_paths = set(
-#            dp.path_iteration.iter_gigaword_paths_in_sector('000'))
-#        self.assertEqual(found_paths, expected_paths)
-#
-#
-#    def test_get_gigaword_path(self):
-#        expected_path = os.path.join(
-#            shared.CONSTANTS.LOCAL_GIGAWORD_DIR,
-#            '000', 'CoreNLP', 'xyz.txt.xml'
-#        )
-#        found_path =  dp.path_iteration.get_gigaword_path('000', 'xyz.txt.xml')
-#        self.assertEqual(found_path, expected_path)
-#
-#
-#    def test_get_tokenized_path(self):
-#        expected_path = os.path.join(
-#            shared.CONSTANTS.TOKENIZED_DIR, '000', 'xyz.txt.xml')
-#        found_path =  dp.path_iteration.get_tokenized_path('000', 'xyz.txt.xml')
-#        self.assertEqual(found_path, expected_path)
-#
-#
-#    def test_iter_tokenized_fnames_in_sector(self):
-#        expected_fname_path = os.path.join(
-#            dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
-#        with open(expected_fname_path) as f:
-#            expected_fnames = [
-#                fname[:-4]  # Strip off the ".xml"
-#                for fname in f.read().split()
-#            ]
-#        expected_paths = {('000', fname) for fname in expected_fnames}
-#        found_paths = set(
-#            dp.path_iteration.iter_tokenized_fnames_in_sector('000'))
-#        self.assertEqual(found_paths, expected_paths)
-#
-#
-#    def test_iter_tokenized_paths_in_sector(self):
-#        expected_fname_path = os.path.join(
-#            dp.CONSTANTS.TEST_DATA_DIR, '000.ls')
-#        with open(expected_fname_path) as f:
-#            expected_fnames = [
-#                fname[:-4]  # Strip off the ".xml"
-#                for fname in f.read().split()
-#            ]
-#        expected_paths = {
-#            dp.path_iteration.get_tokenized_path('000', fname)
-#            for fname in expected_fnames
-#        }
-#        found_paths = set(
-#            dp.path_iteration.iter_tokenized_paths_in_sector('000'))
-#        self.assertEqual(found_paths, expected_paths)
 
 
 class MockUnigram(h.unigram.Unigram):
@@ -216,19 +141,30 @@ class TestUnigramExtraction(TestCase):
             corpus_path, unigram, verbose=False)
         self.assertEqual(len(unigram), len(expected_counts))
         for token in expected_counts:
-            self.assertTrue(unigram.count(token), expected_counts[token])
+            self.assertEqual(unigram.count(token), expected_counts[token])
+
+
+    def test_extract_unigram_parallel(self):
+
+        corpus_path = dp.CONSTANTS.TOKENIZED_CAT_TEST_PATH
+        with open(corpus_path) as test_corpus:
+            tokens = test_corpus.read().strip().split()
+
+        expected_counts = Counter(tokens)
+
+        # Try extraction with different numbers of workers
+        for num_workers in range(1,5):
+            unigram = dp.bigram_extraction.extract_unigram_parallel(
+                corpus_path, 1, verbose=False)
+            self.assertEqual(len(unigram), len(expected_counts))
+            for token in expected_counts:
+                self.assertEqual(unigram.count(token), expected_counts[token])
+
+    
 
 
 
 
-class CoocStatsMock:
-    def __init__(self):
-        self.counts = Counter()
-    def add(self, token1, token2, count=1):
-        self.counts[token1, token2] += count
-
-
-# TODO: test extract_unigram_and_bigram()
 class TestBigramExtraction(TestCase):
 
     def test_extract_bigram(self):
@@ -309,82 +245,160 @@ class TestBigramExtraction(TestCase):
                 )
 
 
-    #def test_cooccurrence_samplers(self):
 
-    #    window_size = 5
-    #    tokens = [str(i) for i in range(10)]
+    def test_extract_bigram_parallel(self):
 
-    #    # Test flat weight
-    #    expected_counts = Counter()
-    #    for i in range(len(tokens)):
-    #        for j in range(i-window_size, i+window_size+1):
-    #            if j==i or j<0 or j>=len(tokens):
-    #                continue
-    #            expected_counts[tokens[i],tokens[j]] += 1
-    #    flat_sampler = dp.bigram_extraction.get_sampler('flat')
-    #    cooc_stats = CoocStatsMock()
-    #    flat_sampler(tokens, cooc_stats, window_size)
-    #    self.assertEqual(cooc_stats.counts, expected_counts)
+        corpus_path = dp.CONSTANTS.TOKENIZED_CAT_TEST_PATH
+        window = 3
+        min_count = None
+        thresh = 1
+        with open(corpus_path) as test_file:
+            documents = [doc.split() for doc in test_file.read().split('\n')]
+        unigram = h.unigram.Unigram()
+        dp.bigram_extraction.extract_unigram(
+            corpus_path, unigram, verbose=False)
+        pristine_unigram = copy.deepcopy(unigram)
 
-    #    # Test harmonic weight
-    #    expected_counts = Counter()
-    #    for i in range(len(tokens)):
-    #        for j in range(i-window_size, i+window_size+1):
-    #            if j==i or j<0 or j>=len(tokens):
-    #                continue
-    #            expected_counts[tokens[i],tokens[j]] += 1.0/abs(i-j)
-    #    harmonic_sampler = dp.bigram_extraction.get_sampler('harmonic')
-    #    cooc_stats = CoocStatsMock()
-    #    harmonic_sampler(tokens, cooc_stats, window_size)
-    #    self.assertEqual(cooc_stats.counts, expected_counts)
+        # Test for different numbers of worker processes
+        for num_workers in range(1, 5):
 
-    #    # Test dynamic weight
-    #    expected_counts = Counter()
-    #    random.seed(0)
-    #    for i in range(len(tokens)):
-    #        use_window = random.randint(1,window_size)
-    #        for j in range(i-use_window, i+use_window+1):
-    #            if j==i or j<0 or j>=len(tokens):
-    #                continue
-    #            expected_counts[tokens[i],tokens[j]] += 1
-    #    dynamic_sampler = dp.bigram_extraction.get_sampler('dynamic')
-    #    cooc_stats = CoocStatsMock()
-    #    random.seed(0)
-    #    dynamic_sampler(tokens, cooc_stats, window_size)
-    #    self.assertEqual(cooc_stats.counts, expected_counts)
+            # Test extracting using flat weighting
+            expected_counts = Counter()
+            for doc in documents:
+                for i in range(len(doc)):
+                    for j in range(i-window, i+window+1):
+                        if j==i or j<0 or j>=len(doc):
+                            continue
+                        expected_counts[doc[i],doc[j]] += 1
+
+            bigram = dp.bigram_extraction.extract_bigram_parallel(
+                corpus_path, num_workers, unigram, 'flat', window, min_count,
+                thresh, verbose=False
+            )
+
+            for token1 in unigram.dictionary.tokens:
+                for token2 in unigram.dictionary.tokens:
+                    self.assertEqual(
+                        bigram.count(token1, token2),
+                        expected_counts[token1, token2]
+                    )
+
+            # Verify that the unigram is unaffected
+            self.assertTrue(np.array_equal(bigram.unigram.Nx, unigram.Nx))
 
 
+            # Test extracting using harmonic weighting
+            expected_counts = Counter()
+            for doc in documents:
+                for i in range(len(doc)):
+                    for j in range(i-window, i+window+1):
+                        if j==i or j<0 or j>=len(doc):
+                            continue
+                        expected_counts[doc[i],doc[j]] += 1.0/abs(i-j)
 
-    #def test_extract_and_write_all(self):
+            bigram = dp.bigram_extraction.extract_bigram_parallel(
+                corpus_path, num_workers, unigram, 'harmonic', window,
+                min_count, thresh, verbose=False
+            )
 
-    #    window = 2
-    #    expected_counts = self.EXPECTED_COUNTS_DOC1 + self.EXPECTED_COUNTS_DOC2 
+            for token1 in unigram.dictionary.tokens:
+                for token2 in unigram.dictionary.tokens:
+                    self.assertEqual(
+                        bigram.count(token1, token2),
+                        expected_counts[token1, token2]
+                    )
 
-    #    paths = list(dp.path_iteration.iter_test_paths())
-    #    write_path = dp.path_iteration.get_test_write_path(
-    #        'test_extract_and_write_all')
-    #    if os.path.exists(write_path):
-    #        shutil.rmtree(write_path)
+            # Verify that the unigram is unaffected
+            self.assertTrue(np.array_equal(bigram.unigram.Nx, unigram.Nx))
 
-    #    cooccurrences = dp.bigram_extraction.extract_and_write_all(
-    #        paths, write_path, window, verbose=False)
+            # Test w2v sampler
+            expected_counts = Counter()
+            random.seed(0)
+            for doc in documents:
+                for i in range(len(doc)):
+                    for j in range(i-window, i+window+1):
+                        if j==i or j<0 or j>=len(doc):
+                            continue
+                        d = abs(i-j)
+                        weight = (window - d + 1) / window
+                        expected_counts[doc[i],doc[j]] += weight
 
-    #    for (token1, token2), count in expected_counts.items():
-    #        idx1 = cooccurrences.dictionary.get_id(token1)
-    #        idx2 = cooccurrences.dictionary.get_id(token2)
-    #        self.assertEqual(cooccurrences.counts[idx1, idx2], count)
-    #        self.assertEqual(cooccurrences.Nxx[idx1, idx2], count)
+            bigram = dp.bigram_extraction.extract_bigram_parallel(
+                corpus_path, num_workers, unigram, 'w2v', window, min_count, 
+                thresh, verbose=False
+            )
 
-    #    # Try loading from what was written, it should be the same as what
-    #    # was returned.
-    #    cooccurrences2 = h.cooc_stats.CoocStats.load(
-    #        write_path, verbose=False)
-    #    self.assertEqual(cooccurrences.counts, cooccurrences2.counts)
-    #    self.assertTrue(np.allclose(
-    #        cooccurrences.Nxx.toarray(), cooccurrences2.Nxx.toarray()))
-    #    self.assertTrue(np.allclose(cooccurrences.Nx, cooccurrences2.Nx))
+            for token1 in unigram.dictionary.tokens:
+                for token2 in unigram.dictionary.tokens:
+                    self.assertEqual(
+                        bigram.count(token1, token2),
+                        expected_counts[token1, token2]
+                    )
 
-    #    shutil.rmtree(write_path)
+            # Verify that the unigram is unaffected
+            self.assertTrue(np.array_equal(bigram.unigram.Nx, unigram.Nx))
+
+            # Test dynamic weight
+            expected_counts = Counter()
+            random.seed(0)
+            for doc in documents:
+                for i in range(len(doc)):
+                    for j in range(i-window, i+window+1):
+                        if j==i or j<0 or j>=len(doc):
+                            continue
+                        d = abs(i-j)
+                        weight = (window - d + 1) / window
+                        expected_counts[doc[i],doc[j]] += weight
+
+            bigram = dp.bigram_extraction.extract_bigram_parallel(
+                corpus_path, num_workers, unigram, 'dynamic', window, min_count,
+                thresh, verbose=False
+            )
+
+            for token1 in unigram.dictionary.tokens:
+                for token2 in unigram.dictionary.tokens:
+                    self.assertEqual(
+                        bigram.count(token1, token2),
+                        expected_counts[token1, token2]
+                    )
+
+            # Verify that the unigram is unaffected
+            self.assertTrue(np.array_equal(bigram.unigram.Nx, unigram.Nx))
+
+
+
+class TestFileAccess(TestCase):
+
+    def test_file_access(self):
+        fname = 'tokenized-cat-test-long.txt'
+        test_path = os.path.join(dp.CONSTANTS.TEST_DATA_DIR, fname)
+
+        with open(test_path) as test_file: 
+            expected_lines = test_file.readlines()
+
+        # Run the test for many different chunk sizes, to ensure that even
+        # when edgecases occur, we always read every line once, and only once.
+        # Important edgecases are when chunk boundaries occur right at, right
+        # before, or right after a newline, and when a chunk contains no lines
+        # at all.
+        for num_chunks in range(1,12):
+            found_lines = []
+            for chunk in range(num_chunks):
+                add_lines = list(
+                    dp.file_access.open_chunk(test_path, chunk, num_chunks)
+                )
+                found_lines.extend(add_lines)
+
+            self.assertEqual(expected_lines, found_lines)
+
+        # Trying to read a chunk greater than or equal to num_chunks is an 
+        # error.
+        with self.assertRaises(ValueError):
+            dp.file_access.open_chunk(test_path, 0, 0)
+        with self.assertRaises(ValueError):
+            dp.file_access.open_chunk(test_path, 2, 2)
+        with self.assertRaises(ValueError):
+            dp.file_access.open_chunk(test_path, 2, 1)
 
 
 

@@ -22,3 +22,10 @@ evaluation/np
 test_embs
 evaluation/.idea/
 evaluation/embeddings/
+*.png
+debug/
+old_png.zip
+build
+dist
+results
+embedding_creation/old_exps

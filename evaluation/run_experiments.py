@@ -7,7 +7,7 @@ from progress.bar import IncrementalBar
 from dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
-from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM
+from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier
 from evaluation.constants import *
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
@@ -20,19 +20,22 @@ def cossim(v1, v2):
 
 
 # Beginning of our experimental code.
-def similarity_exp(embs, hdataset, hparams):
+def similarity_exp(embs, hdataset, hparams, avg_vw=False, verbose=True):
     """
     Runs all 11 of the word similarity experiments on the set of
     embeddings passed to it.
     :param embs: Embeddings class, a hilbert embeddings object.
     :param hdataset: HilbertDataset object
     :param hparams: unused - kept for interface functionality
+    :param avg_vw: set to True to average the vectors and covectors together
+    :param verbose: print or not
     :return: ResultsHolder object
     """
     results = ResultsHolder(SIMILARITY)
 
     # for showing over time
-    print('Running similarity experiments')
+    if verbose:
+        print('Running similarity experiments')
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
@@ -45,6 +48,13 @@ def similarity_exp(embs, hdataset, hparams):
 
             e1 = embs.get_vec(w1, oov_policy='unk')
             e2 = embs.get_vec(w2, oov_policy='unk')
+
+            if avg_vw:
+                e1 += embs.get_covec(w1, oov_policy='unk')
+                e2 += embs.get_covec(w2, oov_policy='unk')
+                e1 /= 2
+                e2 /= 2
+
             similarities.append(cossim(e1, e2).item())
 
         covered = [(p, g) for i, (p, g) in enumerate(zip(similarities,gold)) if had_coverage[i]]
@@ -170,7 +180,8 @@ def seq_labelling_exp(embs, hdataset, hparams):
     neural_kwargs = {'n_labels': len(hdataset.labels_to_idx),
                      'rnn_hdim': hparams.rnn_hdim,
                      'n_layers': hparams.n_layers,
-                     'dropout': hparams.dropout}
+                     'dropout': hparams.dropout,
+                     'fine_tune': hparams.fine_tune}
 
     results = train_seq_labeller(hdataset.name,
                                  embs,
@@ -207,18 +218,27 @@ def classification_exp(embs, hdataset, hparams):
         neural_constructor = FFNN
     elif hparams.model_str.lower() == 'logreg':
         neural_constructor = LogisticRegression
+    elif hparams.model_str.lower() == 'bilstm':
+        neural_constructor = BiLSTMClassifier
     else:
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(hparams.model_str))
 
-    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx)}
+    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx),
+                     'fine_tune': hparams.fine_tune}
 
     # special parameters for a FFNN
-    if hparams.model_str == 'ffnn':
+    if hparams.model_str.lower() == 'ffnn':
         neural_kwargs.update({'hdim1': hparams.hdim1,
                               'hdim2': hparams.hdim2,
                               'dropout': hparams.dropout})
 
+    elif hparams.model_str.lower() == 'bilstm':
+        neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
+                              'n_layers': hparams.n_layers,
+                              'dropout': hparams.dropout})
+
+    # run the model!
     results = train_classifier(hdataset.name,
                                embs,
                                neural_constructor,

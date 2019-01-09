@@ -8,45 +8,28 @@ from evaluation.train_classifier import sort_by_length
 from evaluation.torch_model import SeqLabLSTM
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
+from evaluation.seq_batch_loader import SequenceLoader
 
 
 MAX_MB_SIZE = 1024
 
-def pad_labels(labels):
-    # pad the labels here, sequence padding is done in special way later
-    max_len = max(len(labels[0]), len(labels[-1]))
-    pad = SeqLabLSTM.PADDING_LABEL_ID
-    return torch.LongTensor([lab_seq + [pad] * (max_len - len(lab_seq))
-                             for lab_seq in labels]).to(HParams.DEVICE)
 
-
-def iter_seq_mb(x, y, minibatch_size):
-    for i in range((len(x) // minibatch_size) + 1):
-        seqs = x[i * minibatch_size: (i + 1) * minibatch_size]
-        labels = y[i * minibatch_size: (i + 1) * minibatch_size]
-        if len(seqs) and len(labels):
-            yield seqs, labels
-
-
-def feed_full_seq_ds(neural_model, minibatch_size, x, y):
+def feed_full_seq_ds(neural_model, seqloader):
     # iterate over the dataset to compute the accuracy
     correct, total = 0, 0
-    for tok_seqs, label_seq in iter_seq_mb(x, y, minibatch_size):
+    for tok_seqs, pads, label_seq in seqloader:
 
         # get the yhat prediction matrix for each sample in sequence
-        yhat_mat = neural_model(tok_seqs)
+        yhat_mat = neural_model(tok_seqs, pads)
 
         # from that, get the model predictions
-        gold_labels = pad_labels(label_seq)
-        label_preds = neural_model.get_label_predictions(
-            yhat_mat, gold_labels
-        )
+        label_preds = neural_model.get_label_predictions(yhat_mat, label_seq)
 
         # undo the padding
         label_preds = label_preds[label_preds != SeqLabLSTM.PADDING_LABEL_ID]
 
         # must be same length, if everything went correctly
-        gold_labels = gold_labels[gold_labels != SeqLabLSTM.PADDING_LABEL_ID]
+        gold_labels = label_seq[label_seq != SeqLabLSTM.PADDING_LABEL_ID]
         assert len(label_preds) == len(gold_labels)
 
         # count the correct predictions
@@ -94,14 +77,20 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
 
     # initialize torch things
     model = constr(h_embs, **kw_params).to(HParams.DEVICE)
-    optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
+
+    # initialize data loaders
+    tr_loader = SequenceLoader(tr_x, tr_y, mb_size, model.padding_id, seq_labelling=True)
+    val_loader = SequenceLoader(val_x, val_y, MAX_MB_SIZE, model.padding_id, seq_labelling=True)
+    te_loader = SequenceLoader(te_x, te_y, MAX_MB_SIZE, model.padding_id, seq_labelling=True)
 
     # learning rate scheduler to maximize the validation set accuracy.
     # default with a dummy scheduler where no change occurs
+    optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
     scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=early_stop // 5, mode='max',
         min_lr=0 if schedule_lr else lr, verbose=verbose
     )
+    model_params = [p for p in model.parameters() if p.requires_grad]
 
     # results storage
     results = defaultdict(lambda: [])
@@ -117,21 +106,19 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
         # training set iteration
         training_loss, total = 0, 0
         model.train()
-        for tok_seqs, labels in iter_seq_mb(tr_x, tr_y, mb_size):
+        for tok_seqs, pads, label_seq in tr_loader:
             optimizer.zero_grad()
-            yhat = model(tok_seqs)
-            loss = model.loss(yhat, pad_labels(labels))
+            yhat = model(tok_seqs, pads)
+            loss = model.loss(yhat, label_seq)
             loss.backward()
 
             # normalize gradient, if desired
             if normalize_gradient:
-                gnorm = clip_grad_norm_([p for p in model.parameters() if p.requires_grad],
-                                        max_norm=1, norm_type=2)
+                gnorm = clip_grad_norm_(model_params, max_norm=1, norm_type=2)
                 results['gnorm'].append(gnorm)
 
             # do the backprop update
             optimizer.step()
-
             training_loss += loss.data.item()
             total += 1
 
@@ -143,9 +130,9 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
         with torch.no_grad():
             model.eval()
             # bigger mbsize for test set because we want to go through it as fast as possible
-            train_acc = feed_full_seq_ds(model, max(mb_size, MAX_MB_SIZE), tr_x, tr_y)
-            val_acc = feed_full_seq_ds(model, max(mb_size, MAX_MB_SIZE), val_x, val_y)
-            test_acc = feed_full_seq_ds(model, max(mb_size, MAX_MB_SIZE), te_x, te_y)
+            train_acc = feed_full_seq_ds(model, tr_loader)
+            val_acc = feed_full_seq_ds(model, val_loader)
+            test_acc = feed_full_seq_ds(model, te_loader)
 
             for acc, string in zip([train_acc, val_acc, test_acc], ['train', 'val', 'test']):
                 results['{}_acc'.format(string)].append(acc)
@@ -173,6 +160,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
     results.update({'best_epoch': best_epoch,
                     'best_validation_accuracy': best_val_acc,
                     'test_accuracy_at_best_epoch': results['test_acc'][best_epoch]})
+
     hilb_res = ResultsHolder(exp_name)
     hilb_res.add_ds_results('full', results)
     return hilb_res

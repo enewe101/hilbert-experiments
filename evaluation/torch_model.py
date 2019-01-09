@@ -6,13 +6,12 @@ from evaluation.hparams import HParams
 
 
 # Generic model to feed forward token sequences to embeddings
-# TODO: allow for learning the embeddings from scratch.
 class EmbeddingModel(nn.Module):
     """
     Generic module that stores pre-trained embeddings for any
     other neural model we'll be implementing.
     """
-    def __init__(self, h_embs, use_vectors=True, zero_padding=False):
+    def __init__(self, h_embs, fine_tune=True, use_vectors=True, zero_padding=False):
         super(EmbeddingModel, self).__init__()
 
         if not use_vectors:
@@ -36,8 +35,7 @@ class EmbeddingModel(nn.Module):
         # combine them all
         _all_embs = torch.cat((h_embs.V.float(),
                                h_embs.unk.float().reshape(1, -1),
-                               _padding),
-                              dim=0).to(HParams.DEVICE)
+                               _padding), dim=0).to(HParams.DEVICE)
 
         # now, put the pretrained ones into them
         self.torch_padding_id = torch.LongTensor([self.padding_id]).to(HParams.DEVICE)
@@ -45,32 +43,12 @@ class EmbeddingModel(nn.Module):
         # if we want to use zero padding we need this kwarg
         _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
         self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(HParams.DEVICE)
-        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=False)
+        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=fine_tune)
         self.emb_dim = _dim
 
 
-    def forward(self, sorted_tok_ids):
-        """
-        :param sorted_tok_ids: sorted by length list of lists of tokens
-        :return: tensor of embeddings, with padding, for a downstream model
-        """
-        # must be sorted by length on input, either increasing or decreasing
-        max_len = max(len(sorted_tok_ids[0]), len(sorted_tok_ids[-1]))
-
-        ids = [] # the actual token ids
-        pads = [] # store number of pads in each thing
-        for tok_ids in sorted_tok_ids:
-
-            # add the padding and add the ids
-            ids.append(tok_ids + [self.padding_id] * (max_len - len(tok_ids)))
-            pads.append(max_len - len(tok_ids)) # number of paddings appended
-
-        # now convert to long tensors
-        torch_ids = torch.LongTensor(ids).to(HParams.DEVICE)
-        torch_pads = torch.LongTensor(pads).to(HParams.DEVICE)
-
-        # now finally yield the sequence of embeddings
-        return self.embeddings(torch_ids), torch_pads
+    def forward(self, token_seqs):
+        return self.embeddings(token_seqs)
 
 
     def get_padding_vec(self):
@@ -85,15 +63,15 @@ class EmbeddingPooler(EmbeddingModel):
     - it pools together word embeddings according to either mean
     pooling, max pooling, or both. It ignores padding.
     """
-    def __init__(self, h_embs, use_vectors=True, pooling='mean'):
-        super(EmbeddingPooler, self).__init__(h_embs, use_vectors)
+    def __init__(self, h_embs, pooling='mean', **kwargs):
+        super(EmbeddingPooler, self).__init__(h_embs, **kwargs)
         self.pooling = pooling
         self.do_mean = self.pooling == 'both' or self.pooling == 'mean'
         self.do_max = self.pooling == 'both' or self.pooling == 'max'
 
 
-    def forward(self, token_minibatch):
-        embs, pads = super(EmbeddingPooler, self).forward(token_minibatch)
+    def forward(self, token_seqs, pads=None):
+        embs = super(EmbeddingPooler, self).forward(token_seqs)
 
         # shape of embs is batch_size X max_seq_length X embedding_dim
         mb_size, max_len, emb_dim = embs.shape
@@ -128,27 +106,25 @@ class EmbeddingPooler(EmbeddingModel):
 
 # classes for the actual learning models
 class LogisticRegression(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, use_vectors=True, pooling='mean'):
+    def __init__(self, h_embs, n_classes, pooling='mean', **kwargs):
         super(LogisticRegression, self).__init__(
-            h_embs, use_vectors=use_vectors, pooling=pooling)
+            h_embs, pooling=pooling, **kwargs)
 
         # number of input features
         in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
         self.output = nn.Linear(in_features, n_classes)
 
 
-    def forward(self, token_minibatch):
-        pooled_embs = super(LogisticRegression, self).forward(token_minibatch)
+    def forward(self, token_seqs, pads=None):
+        pooled_embs = super(LogisticRegression, self).forward(token_seqs, pads)
         return self.output(pooled_embs)
 
 
 
+# Basic FNN for classification on pooled word embeddings
 class FFNN(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, hdim1, hdim2,
-                 dropout=0.,
-                 use_vectors=True,
-                 pooling='mean'):
-        super(FFNN, self).__init__(h_embs, use_vectors=use_vectors, pooling=pooling)
+    def __init__(self, h_embs, n_classes, hdim1, hdim2, dropout=0., pooling='max', **kwargs):
+        super(FFNN, self).__init__(h_embs, pooling=pooling, **kwargs)
         assert hdim1 > 0 and hdim2 > 0
 
         # number of input features
@@ -164,9 +140,66 @@ class FFNN(EmbeddingPooler):
             nn.Linear(hdim2, n_classes)
         )
 
-    def forward(self, token_minibatch):
-        pooled_embs = super(FFNN, self).forward(token_minibatch)
+    def forward(self, token_seqs, pads=None):
+        pooled_embs = super(FFNN, self).forward(token_seqs, pads)
         return self.model(pooled_embs)
+
+
+
+# Basic BiLSTM for classification of word sequences.
+class BiLSTMClassifier(EmbeddingModel):
+
+    def __init__(self, h_embs, n_classes, rnn_hdim, n_layers=1, dropout=0, **kwargs):
+        super(BiLSTMClassifier, self).__init__(h_embs, zero_padding=True, **kwargs)
+        assert rnn_hdim > 0 and n_classes > 0 and n_layers > 0
+
+        self.hidden_dim = rnn_hdim
+        self.n_layers = n_layers
+        self.n_classes = n_classes
+
+        # the big boy LSTM that does all the work
+        self.lstm = nn.LSTM(input_size=self.emb_dim,
+                            hidden_size=self.hidden_dim,
+                            num_layers=self.n_layers,
+                            batch_first=True,
+                            bidirectional=True,
+                            dropout=dropout)
+
+        # output label prediction at each time step
+        self.hidden_to_class = nn.Linear(self.hidden_dim * 2, self.n_classes)
+
+        # don't do hidden initialization until we know the batch size
+        self.hidden = None
+
+
+    def init_hidden(self, mb_size):
+        hstate = torch.zeros(self.n_layers * 2, mb_size, self.hidden_dim).to(HParams.DEVICE)
+        cstate = torch.zeros(self.n_layers * 2, mb_size, self.hidden_dim).to(HParams.DEVICE)
+        return hstate, cstate
+
+
+    def forward(self, token_seqs, pads=None):
+        # get the tensor with emb sequences, along with the number of pads in each seq
+        emb_seqs = super(BiLSTMClassifier, self).forward(token_seqs)
+
+        # now we gotta do some special packing
+        # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)
+        bsz, max_len, emb_dim = emb_seqs.shape
+        self.hidden = self.init_hidden(bsz)
+        X = nn.utils.rnn.pack_padded_sequence(emb_seqs, max_len - pads, batch_first=True)
+
+        # feed throught the bilstm
+        X, (hidden_state, cell_state) = self.lstm(X, self.hidden)
+        last_backward = hidden_state[-1, :, :]
+        last_forward = hidden_state[-2, :, :]
+        state_concat = torch.cat((last_forward, last_backward), dim=1)
+
+        # run through the linear tag prediction
+        Y = self.hidden_to_class(state_concat) # dim is bsz X n_labels
+
+        # softmax activations in the feed forward for an easy main method
+        Y_hat = F.log_softmax(Y, dim=1)
+        return Y_hat.view(bsz, self.n_classes)
 
 
 
@@ -178,12 +211,9 @@ class SeqLabLSTM(EmbeddingModel):
 
 
     # extends the EmbeddingModel class which uses our pretrained embeddings.
-    def __init__(self, h_embs, n_labels, rnn_hdim,
-                 n_layers=1,
-                 use_vectors=True,
-                 bidirectional=True,
-                 dropout=0):
-        super(SeqLabLSTM, self).__init__(h_embs, use_vectors=use_vectors, zero_padding=True)
+    def __init__(self, h_embs, n_labels, rnn_hdim, n_layers=1,
+                 bidirectional=True, dropout=0, **kwargs):
+        super(SeqLabLSTM, self).__init__(h_embs, zero_padding=True, **kwargs)
         assert rnn_hdim > 0 and n_labels > 0 and n_layers > 0
 
         self.hidden_dim = rnn_hdim
@@ -207,14 +237,14 @@ class SeqLabLSTM(EmbeddingModel):
 
 
     def init_hidden(self, mb_size):
-        hc = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(HParams.DEVICE)
-        hh = torch.zeros(self.n_layers * self.n_directions, mb_size, self.hidden_dim).to(HParams.DEVICE)
-        return hc, hh
+        hstate = torch.zeros(self.n_layers * 2, mb_size, self.hidden_dim).to(HParams.DEVICE)
+        cstate = torch.zeros(self.n_layers * 2, mb_size, self.hidden_dim).to(HParams.DEVICE)
+        return hstate, cstate
 
 
-    def forward(self, sorted_tok_ids):
+    def forward(self, sorted_tok_ids, pads):
         # get the tensor with emb sequences, along with the number of pads in each seq
-        emb_seqs, pads = super(SeqLabLSTM, self).forward(sorted_tok_ids)
+        emb_seqs = super(SeqLabLSTM, self).forward(sorted_tok_ids)
 
         # now we gotta do some special packing
         # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)

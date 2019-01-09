@@ -6,6 +6,7 @@ from collections import defaultdict
 from sklearn.model_selection import train_test_split
 from evaluation.hparams import HParams
 from evaluation.results import ResultsHolder
+from evaluation.seq_batch_loader import SequenceLoader
 
 
 MAX_MB_SIZE = 2048
@@ -16,20 +17,13 @@ def sort_by_length(x, y, reverse=False):
     return zip(*r(sorted(zip(x, y), key=sort_key)))
 
 
-def iter_mb(x, y, minibatch_size):
-    for i in range((len(x) // minibatch_size) + 1):
-        seqs = x[i * minibatch_size: (i + 1) * minibatch_size]
-        labels = y[i * minibatch_size: (i + 1) * minibatch_size]
-        yield seqs, torch.LongTensor(labels).to(HParams.DEVICE)
-
-
-def feed_full_ds(neural_model, minibatch_size, x, y):
+def feed_full_ds(neural_model, ds_loader):
     correct = 0
-    for tok_seqs, labels in iter_mb(x, y, minibatch_size):
-        predictions = neural_model(tok_seqs)
+    for tok_seqs, tok_pads, labels in ds_loader:
+        predictions = neural_model(tok_seqs, tok_pads)
         _, label_preds = torch.max(predictions.data, 1)
         correct += (label_preds == labels).sum().item()
-    return correct / len(x)
+    return correct / ds_loader.n_samples
 
 
 def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
@@ -61,12 +55,19 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
     )
 
     # sort the datasets by length of the sentences, very useful
-    tr_x, tr_y = sort_by_length(tr_x, tr_y)
-    val_x, val_y = sort_by_length(val_x, val_y)
-    te_x, te_y = sort_by_length(te_x, te_y)
+    tr_x, tr_y = sort_by_length(tr_x, tr_y, reverse=True)
+    val_x, val_y = sort_by_length(val_x, val_y, reverse=True)
+    te_x, te_y = sort_by_length(te_x, te_y, reverse=True)
 
     # initialize torch things
     model = classifier_constr(h_embs, **kw_params).to(HParams.DEVICE)
+
+    # push everything onto the GPU (hopefully it all fits!)
+    tr_loader = SequenceLoader(tr_x, tr_y, mb_size, model.padding_id)
+    val_loader = SequenceLoader(val_x, val_y, MAX_MB_SIZE, model.padding_id)
+    te_loader = SequenceLoader(te_x, te_y, MAX_MB_SIZE, model.padding_id)
+
+    # get the big daddy bois
     optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
     loss_fun = nn.CrossEntropyLoss()
 
@@ -94,19 +95,20 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
         if verbose: print('\nEpoch {}: (training)'.format(e))
 
         # training set iteration
+        model.train()
         training_loss = 0
         optimizer.zero_grad()
 
         # iterate over token sequences and the classification labels for each
-        for tok_seqs, labels in iter_mb(tr_x, tr_y, mb_size):
+        for tok_seqs, tok_pads, classes in tr_loader:
 
             # check if we are doing full batch trianing, if not, zero-out gradient.
             if not full_batch_train:
                 optimizer.zero_grad()
 
             # make the predictions, compute loss and record it
-            predictions = model(tok_seqs)
-            loss = loss_fun(predictions, labels)
+            predictions = model(tok_seqs, tok_pads)
+            loss = loss_fun(predictions, classes)
             training_loss += loss.data.item()
 
             # compute the back gradient
@@ -129,9 +131,9 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
         with torch.no_grad():
             model.eval()
             # bigger mbsize for test set because we want to go through it as fast as possible
-            train_acc = feed_full_ds(model, max(MAX_MB_SIZE, mb_size), tr_x, tr_y)
-            val_acc = feed_full_ds(model, max(MAX_MB_SIZE, mb_size), val_x, val_y)
-            test_acc = feed_full_ds(model, max(MAX_MB_SIZE, mb_size), te_x, te_y)
+            train_acc = feed_full_ds(model, tr_loader)
+            val_acc = feed_full_ds(model, val_loader)
+            test_acc = feed_full_ds(model, te_loader)
 
             for acc, string in zip([train_acc, val_acc, test_acc], ['train', 'val', 'test']):
                 results['{}_acc'.format(string)].append(acc)
