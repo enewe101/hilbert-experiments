@@ -42,7 +42,7 @@ def get_evalfun_and_arg(run_eval):
     return eval_fun, eval_arg
 
 
-def load_embeddings_as_hilbert(path, verbose=True):
+def load_embeddings_as_hilbert(path, verbose=True, avg_vw=False):
     global SVD_GAMMA
 
     # if this is the case, we are doing SVD and need to do special loading
@@ -57,7 +57,7 @@ def load_embeddings_as_hilbert(path, verbose=True):
 
     if verbose:
         print('Loading regular embeddings...')
-    return load_embeddings(path)
+    return load_embeddings(path, avg_vw)
 
 
 def get_best(epochs_res):
@@ -102,13 +102,13 @@ def evaluate_embs(path, dataset, avg_vw=False):
         except FileNotFoundError:
             pass
     if dataset.name == 'similarity':
-        embs = load_embeddings_as_hilbert(path)
+        embs = load_embeddings_as_hilbert(path, avg_vw=avg_vw)
         if embs.has_nan():
             results = None
             print(f'Warning! NAN for {path}')
         else:
             try:
-                results = similarity_exp(embs, dataset, None, avg_vw=avg_vw)
+                results = similarity_exp(embs, dataset, None)
             except ValueError:
                 print('NAN results')
                 results = None
