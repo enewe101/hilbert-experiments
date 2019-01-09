@@ -15,7 +15,7 @@ def analyze_glove_bias(glove_results_dir):
         os.path.basename(glove_results_dir)
     )
     fields = read_bias_frequency_pairs(in_path)
-    v_biases, w_biases, log_freqs_normed, log_freq = fields
+    v_biases, w_biases, log_freqs_normed, log_freqs = fields
     #mean_biases = [
     #    (v_bias + w_bias) / 2 for v_bias, w_bias in zip(v_biases, w_biases)]
     plt.scatter(log_freqs_normed, v_biases, s=10)
