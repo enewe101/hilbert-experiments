@@ -17,7 +17,9 @@ def make_glove_embeddings(
     iterations=15,
     window=5,
     threads=8,
-    X_max=100
+    X_max=100,
+    save_mode=0,
+    stats_path=None,
 ):
     corpus = shared.CONSTANTS.TOKENIZED_CAT_FULL_PATH
     command = [
@@ -30,8 +32,13 @@ def make_glove_embeddings(
         str(iterations),
         str(window),
         str(threads),
-        str(X_max)
+        str(X_max),
+        str(save_mode),
+        str(stats_path)
     ]
+
+    print(str(save_mode))
+
     trace = ' '.join(command)
     print(trace)
     if not os.path.exists(out_dir):
@@ -56,10 +63,6 @@ if __name__ == '__main__':
         '--iterations', '-i', type=int, default=15, help='Number of iterations'
     )
     parser.add_argument(
-        '--window', '-w', type=int, required=True,
-        help='Cooccurrence window size'
-    )
-    parser.add_argument(
         '--threads', '-t', type=int, required=True, help="Number of threads"
     )
     parser.add_argument(
@@ -69,10 +72,44 @@ if __name__ == '__main__':
         '--dimension', '-d', type=int, default=300., 
         help="Vector dimensionality"
     )
+    parser.add_argument(
+        '--save-mode', '-s', type=int, default=2, 
+        help=(
+            "Whether to output (0) vectors, covectors, and biases, (1) only "
+            "vectors (no biases or covectors), or (2) vectors and covectors "
+            "(no biases)."
+        )
+    )
+
+    parser.add_argument(
+        '--window', '-w', type=int, default=None,
+        help='Cooccurrence window size'
+    )
+    parser.add_argument(
+        '--stats-path', '-p', type=str, default='', 
+        help=(
+            "Path to the directory containing the unigram and bigram data "
+            "files previously extracted by glove.  If not provided, GloVe "
+            "will extract those files from the corpus.  If provided, GloVe "
+            "will skip the extraction step and use the already-extracted data."
+        )
+    )
 
     args = vars(parser.parse_args())
+
+    # Either stats path must be set, or window size must be set
+    if args['stats_path'] == '' and args[window] is None:
+        raise ValueError(
+            "Either stats path must be set, or window size must be set")
+
+    # outdir is relative to the embeddings directory
     args['out_dir'] = os.path.join(
         shared.CONSTANTS.EMBEDDINGS_DIR, args['out_dir'])
+
+    # stats_path is relative to embeddings directory.
+    if args['stats_path'] is not '':
+        args['stats_path'] = os.path.join(
+            shared.CONSTANTS.EMBEDDINGS_DIR, args['stats_path'])
 
     make_glove_embeddings(**args)
 

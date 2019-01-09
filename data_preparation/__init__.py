@@ -2,7 +2,6 @@ import data_preparation.CONSTANTS
 import data_preparation.extract_tokenized
 import data_preparation.bigram_extraction
 import data_preparation.path_iteration
-import data_preparation.bigram_sampler
 import data_preparation.file_access
 
 from data_preparation.bigram_extraction import read_stats, read_test_stats

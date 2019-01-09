@@ -193,8 +193,8 @@ def extract_bigram_parallel_worker(args):
         corpus_path, worker_id, num_workers, unigram, sampler_type, 
         window, min_count, thresh, verbose
     ) = args
-    bigram = h.bigram.Bigram(unigram)
-    sampler = dp.bigram_sampler.get_sampler(
+    bigram = h.bigram.BigramMutable(unigram)
+    sampler = h.bigram.sampler.get_sampler(
         sampler_type, bigram, window, min_count, thresh)
     file_chunk = dp.file_access.open_chunk(corpus_path, worker_id, num_workers)
     start = time.time()
