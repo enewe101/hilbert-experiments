@@ -1,29 +1,42 @@
 import os
-import torch
 import time
 import hilbert as h
 import shared
 from matplotlib import pyplot as plt
+try:
+    import torch
+except ImportError:
+    torch = None
 
 
-def analyze_glove_bias(bigram_path, glove_results_dir, force=False):
-    (v_biases, w_biases), log_freqs = get_bias_frequency_pairs(
-        bigram_path, glove_results_dir, force)
-    plt.plot(log_freqs, v_biases)
+def analyze_glove_bias(glove_results_dir):
+    in_path = os.path.join(
+        shared.CONSTANTS.GLOVE_ANALYSIS_DIR,
+        os.path.basename(glove_results_dir)
+    )
+    (v_biases, w_biases), log_freqs = read_bias_frequency_pairs(in_path)
+    mean_biases = [
+        (v_bias + w_bias) / 2 for v_bias, w_bias in zip(v_biases, w_biases)]
+    plt.scatter(log_freqs, v_biases, s=10)
+    #plt.plot(log_freqs, mean_biases)
+    plt.plot([-1,9], [-1,9])
     plt.show()
 
 
 def get_bias_frequency_pairs(bigram_path, glove_results_dir, force=False):
 
     out_path = os.path.join(
-        shared.CONSTANTS.GLOVE_ANALYSIS_DIR, os.path.basename(glove_results_dir))
+        shared.CONSTANTS.GLOVE_ANALYSIS_DIR,
+        os.path.basename(glove_results_dir)
+    )
 
     # Just read bias frequency pairs from disk if they are there.
     if not force and os.path.exists(out_path):
         return read_bias_frequency_pairs(out_path)
 
     # Otherwise, calculate them.
-    biases, log_freqs = calc_bias_frequency_pairs(bigram_path, glove_results_dir)
+    biases, log_freqs = calc_bias_frequency_pairs(
+        bigram_path, glove_results_dir)
 
     # And write them to disk for next time
     write_bias_frequency_pairs(biases, log_freqs, out_path)
