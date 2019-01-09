@@ -24,6 +24,8 @@ def translate_embeddings(
     given by a dictionary stored on disc at dictionary_path.
     """
     if embedding_type.lower() == 'word2vec':
+        if has_bias:
+            raise ValueError("Word2vec embeddings should not have bias.")
         embeddings = read_w2v_embeddings(in_path, has_covectors)
     elif embedding_type.lower() == 'glove':
         embeddings = read_glove_embeddings(in_path, has_covectors, has_bias)
@@ -178,7 +180,7 @@ if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
-    if args['type'] == 'w2v':
+    if args['embedding_type'] == 'w2v':
         args['embedding_type'] = 'word2vec'
 
     if args['embedding_type'] == 'word2vec' and args['has_bias']:
