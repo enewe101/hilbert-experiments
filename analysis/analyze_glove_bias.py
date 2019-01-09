@@ -14,16 +14,18 @@ def analyze_glove_bias(glove_results_dir):
         shared.CONSTANTS.GLOVE_ANALYSIS_DIR,
         os.path.basename(glove_results_dir)
     )
-    (v_biases, w_biases), log_freqs = read_bias_frequency_pairs(in_path)
-    mean_biases = [
-        (v_bias + w_bias) / 2 for v_bias, w_bias in zip(v_biases, w_biases)]
+    fields = read_bias_frequency_pairs(in_path)
+    v_biases, w_biases, log_freqs_normed, log_freq = fields
+    #mean_biases = [
+    #    (v_bias + w_bias) / 2 for v_bias, w_bias in zip(v_biases, w_biases)]
+    plt.scatter(log_freqs_normed, v_biases, s=10)
     plt.scatter(log_freqs, v_biases, s=10)
-    #plt.plot(log_freqs, mean_biases)
     plt.plot([-1,9], [-1,9])
+    #plt.plot(log_freqs, mean_biases)
     plt.show()
 
 
-def get_bias_frequency_pairs(bigram_path, glove_results_dir, force=False):
+def prepare_bias_frequency_pairs(bigram_path, glove_results_dir, force=False):
 
     out_path = os.path.join(
         shared.CONSTANTS.GLOVE_ANALYSIS_DIR,
@@ -35,28 +37,31 @@ def get_bias_frequency_pairs(bigram_path, glove_results_dir, force=False):
         return read_bias_frequency_pairs(out_path)
 
     # Otherwise, calculate them.
-    biases, log_freqs = calc_bias_frequency_pairs(
+    v_biases, w_biases, log_freqs_normed, log_freqs = calc_bias_frequency_pairs(
         bigram_path, glove_results_dir)
 
     # And write them to disk for next time
-    write_bias_frequency_pairs(biases, log_freqs, out_path)
+    write_bias_frequency_pairs(
+        v_biases, w_biases, log_freqs_normed, log_freqs, out_path)
 
-    return biases, log_freqs
+    return v_biases, w_biases, log_freqs_normed, log_freqs
 
 
 def read_bias_frequency_pairs(in_path):
-    v_biases, w_biases, log_freqs = [], [], []
+    v_biases, w_biases, log_freqs_normed, log_freqs = [], [], [], []
     with open(in_path) as in_file:
         first = True
         for line in in_file:
             if first:
                 first=False
                 continue
-            v_bias_str, w_bias_str, log_freq_str = line.strip().split('\t')
+            fields = line.strip().split('\t')
+            v_bias_str, w_bias_str, log_freq_normed_str, log_freq_str = fields
             v_biases.append(float(v_bias_str))
             w_biases.append(float(w_bias_str))
+            log_freqs_normed.append(float(log_freq_normed_str))
             log_freqs.append(float(log_freq_str))
-    return (v_biases, w_biases), log_freqs
+    return v_biases, w_biases, log_freqs_normed, log_freqs
 
 
 def calc_bias_frequency_pairs(bigram_path, glove_results_dir):
@@ -82,23 +87,30 @@ def calc_bias_frequency_pairs(bigram_path, glove_results_dir):
         embeddings.w_bias[embeddings.dictionary.get_id(token)].item()
         for token in embeddings.dictionary.tokens
     ]
-    log_freqs = [
+    log_freqs_normed = [
         torch.log(
-            bigram.uNx[bigram.dictionary.get_id(token),0] / torch.sqrt(bigram.uN)
+            bigram.uNx[bigram.dictionary.get_id(token),0] 
+            / torch.sqrt(bigram.uN)
         ).item()
         for token in embeddings.dictionary.tokens
     ]
+    log_freqs = [
+        torch.log(bigram.uNx[bigram.dictionary.get_id(token),0]).item()
+        for token in embeddings.dictionary.tokens
+    ]
 
-    return (v_biases, w_biases), log_freqs
+    return v_biases, w_biases, log_freqs_normed, log_freqs
 
 
-def write_bias_frequency_pairs(biases, log_freqs, out_path):
-    v_biases, w_biases = biases
+def write_bias_frequency_pairs(
+    v_biases, w_biases, log_freqs_normed, log_freqs, out_path
+):
     with open(out_path, 'w') as out_file:
-        out_file.write('v_bias\tw_bias\tlg(Nx/N)\n')
+        out_file.write('v_bias\tw_bias\tlg(Nx/N)\tlg(Nx)\n')
         out_file.write('\n'.join([
-            '{}\t{}\t{}'.format(v_bias, w_bias, log_freq) 
-            for v_bias, w_bias, log_freq in zip(v_biases, w_biases, log_freqs)
+            '{}\t{}\t{}\t{}'.format(v_bias, w_bias, log_freq_normed, log_freq) 
+            for v_bias, w_bias, log_freq_normed, log_freq
+            in zip(v_biases, w_biases, log_freqs_normed, log_freqs)
         ]))
 
 
