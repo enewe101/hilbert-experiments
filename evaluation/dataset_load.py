@@ -371,6 +371,7 @@ if __name__ == '__main__':
                 assert type(s[2] == float)
             print('\tExample: {}'.format(sample_list[15]))
         print('Similarity tests passed.\n')
+        exit(0)
 
         # analogytests
         analogy_ds = load_analogies()
