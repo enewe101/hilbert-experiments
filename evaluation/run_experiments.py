@@ -181,9 +181,7 @@ def analogy_exp(embs, hdataset, hparams):
     return results
 
 
-# TODO: write code to tune the hyperparams of ALL of the models.
 # TODO: add CRF on top of the LSTM predictions.
-# TODO: serialize results systematically.
 # TODO: improve documentation.
 
 def seq_labelling_exp(embs, hdataset, hparams):
@@ -215,9 +213,9 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  neural_constructor,
                                  neural_kwargs,
                                  lr=hparams.lr,
-                                 n_epochs=100,
+                                 n_epochs=250,
                                  mb_size=hparams.mb_size,
-                                 early_stop=20,
+                                 early_stop=10,
                                  tr_x=tr_x,
                                  tr_y=tr_y,
                                  te_x=te_x,
@@ -266,14 +264,15 @@ def classification_exp(embs, hdataset, hparams):
                               'dropout': hparams.dropout})
 
     # run the model!
-    results = train_classifier(hdataset.name,
+    exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
+    results = train_classifier(exp_name,
                                embs,
                                neural_constructor,
                                neural_kwargs,
                                lr=hparams.lr,
-                               n_epochs=100,
+                               n_epochs=250,
                                mb_size=hparams.mb_size,
-                               early_stop=20,
+                               early_stop=10,
                                tr_x=tr_x,
                                tr_y=tr_y,
                                te_x=te_x,
