@@ -73,8 +73,8 @@ def similarity_exp(embs, hdataset, hparams, verbose=True):
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
-        if dname in ('semeval17task2_trial', 'men_dev'):
-            continue # don't do these ones!
+        if dname == 'semeval17task2_trial':
+            continue # don't do this shitty one as it only has 18 samples!
 
         similarities = []
         gold = []
@@ -319,7 +319,7 @@ def main():
             SIMILARITY: similarity_exp,
             BROWN_POS: seq_labelling_exp,
             WSJ_POS: seq_labelling_exp,
-            CHUNKING: seq_labelling_exp,
+            # CHUNKING: seq_labelling_exp,
             SENTIMENT: classification_exp,
             NEWS: classification_exp,
             ANALOGY: analogy_exp,

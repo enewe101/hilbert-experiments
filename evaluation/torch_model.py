@@ -120,7 +120,7 @@ class LogisticRegression(EmbeddingPooler):
 
 # Basic FNN for classification on pooled word embeddings
 class FFNN(EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, hdim1, hdim2, dropout=0., pooling='max', **kwargs):
+    def __init__(self, h_embs, n_classes, hdim1, hdim2, dropout=0., pooling='mean', **kwargs):
         super(FFNN, self).__init__(h_embs, pooling=pooling, **kwargs)
         assert hdim1 > 0 and hdim2 > 0
 

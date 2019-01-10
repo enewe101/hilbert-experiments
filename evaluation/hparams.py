@@ -28,7 +28,7 @@ class HParams(object):
         parser.add_argument('--rnn_hdim', type=int, default=128,
                             help='dimensionality of RNN hidden layer')
         parser.add_argument('--n_layers', type=int, default=2,
-                            help='number of layers for a neural net that takes this param')
+                            help='number of layers for an RNN')
         parser.add_argument('--lr', type=float, default=0.001,
                             help='learning rate for a torch model')
         parser.add_argument('--mb_size', type=int, default=64,
