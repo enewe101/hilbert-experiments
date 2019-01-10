@@ -73,6 +73,9 @@ def similarity_exp(embs, hdataset, hparams, verbose=True):
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
+        if dname == 'semeval17task2_trial':
+            continue # don't do this shitty one as it only has 18 samples!
+
         similarities = []
         gold = []
         had_coverage = []
@@ -301,10 +304,6 @@ def get_all_words(list_of_hdatasets):
 def main():
     hparams = HParams() # parses args
 
-    # set the seed!
-    np.random.seed(hparams.seed)
-    torch.random.manual_seed(hparams.seed)
-
     # load up the datasets and get the vocab we will need.
     print('Loading datasets...')
     datasets = np.load('np/all_data.npz')['arr_0'][0]
@@ -319,7 +318,7 @@ def main():
             SIMILARITY: similarity_exp,
             BROWN_POS: seq_labelling_exp,
             WSJ_POS: seq_labelling_exp,
-            CHUNKING: seq_labelling_exp,
+            # CHUNKING: seq_labelling_exp,
             SENTIMENT: classification_exp,
             NEWS: classification_exp,
             ANALOGY: analogy_exp,
@@ -328,8 +327,29 @@ def main():
         for expname, exp in names_to_fun.items():
             if hparams.experiment != 'all' and expname != hparams.experiment:
                 continue
-            results = exp(emb, datasets[expname], hparams)
-            results.serialize(emb_path, hparams.get_params_str())
+
+            # we may be running repeated experiments
+            mean_results = ResultsHolder(expname)
+            params_str = hparams.get_params_str()
+            for i in range(hparams.repeat):
+
+                # set the seed right before running experiment
+                hparams.seed += (i * 1917)
+                np.random.seed(hparams.seed)
+                torch.random.manual_seed(hparams.seed)
+
+                # run it and get the results!
+                results = exp(emb, datasets[expname], hparams)
+
+                if hparams.repeat == 1:
+                    mean_results = results
+                else:
+                    got_res = {**results['full'].items()}
+                    mean_results.add_ds_results(f'seed {hparams.seed}', got_res)
+
+            mean_results.serialize(emb_path, params_str)
+
+
 
 
 if __name__ == '__main__':

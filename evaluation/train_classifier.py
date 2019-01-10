@@ -130,7 +130,7 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
         if verbose: print('    (evaluating...)')
         with torch.no_grad():
             model.eval()
-            # bigger mbsize for test set because we want to go through it as fast as possible
+
             train_acc = feed_full_ds(model, tr_loader)
             val_acc = feed_full_ds(model, val_loader)
             test_acc = feed_full_ds(model, te_loader)

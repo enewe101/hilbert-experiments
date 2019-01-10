@@ -232,7 +232,6 @@ def compare_and_save(sample_res, target_res, save_path, reskey='full-spearman'):
 
 ########## SVD things ###########
 #---------            ----------#
-
 def svd_tests(base_dir, dataset, sample_name='', reskey='full-spearman'):
     # first, load all the STD svds
     std_paths = []

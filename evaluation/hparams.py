@@ -1,7 +1,7 @@
 import argparse
 import torch
 import os
-from constants import ALL_DS
+from constants import ALL_DS, SUP_DS
 
 class HParams(object):
 
@@ -16,6 +16,9 @@ class HParams(object):
         parser.add_argument('--base', type=str,
                             default='/home/ml/kkenyo1/git/hilbert-experiments/evaluation/test_embs',
                             help='base directory where the embeddings we will test are stored')
+        parser.add_argument('--repeat', type=int, default=1,
+                            help='repeat for specified number of times with different seeds each'
+                                 ' time (but seeds will always be +1917 from the --seed parameter)')
         parser.add_argument('--avgvw', action='store_true',
                             help='flag to average vecs and covecs (like GloVe does!)')
         parser.add_argument('--seed', type=int, default=1,
@@ -25,7 +28,7 @@ class HParams(object):
         parser.add_argument('--rnn_hdim', type=int, default=128,
                             help='dimensionality of RNN hidden layer')
         parser.add_argument('--n_layers', type=int, default=2,
-                            help='number of layers for a neural net that takes this param')
+                            help='number of layers for an RNN')
         parser.add_argument('--lr', type=float, default=0.001,
                             help='learning rate for a torch model')
         parser.add_argument('--mb_size', type=int, default=64,
@@ -60,6 +63,9 @@ class HParams(object):
                 print(f'\t{p}')
             print('Dry run, exiting...')
             exit(0)
+
+        if self.repeat > 1:
+            assert self.experiment in SUP_DS
 
     def iter_emb_paths(self):
         for emb_dir in self.emb_dir:
