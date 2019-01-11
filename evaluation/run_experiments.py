@@ -73,8 +73,8 @@ def similarity_exp(embs, hdataset, hparams, verbose=True):
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
-        if dname in ('semeval17task2_trial', 'men_dev'):
-            continue # don't do these ones!
+        if dname == 'semeval17task2_trial':
+            continue # don't do this shitty one as it only has 18 samples!
 
         similarities = []
         gold = []
@@ -184,9 +184,7 @@ def analogy_exp(embs, hdataset, hparams):
     return results
 
 
-# TODO: write code to tune the hyperparams of ALL of the models.
 # TODO: add CRF on top of the LSTM predictions.
-# TODO: serialize results systematically.
 # TODO: improve documentation.
 
 def seq_labelling_exp(embs, hdataset, hparams):
@@ -218,9 +216,9 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  neural_constructor,
                                  neural_kwargs,
                                  lr=hparams.lr,
-                                 n_epochs=100,
+                                 n_epochs=hparams.epochs,
                                  mb_size=hparams.mb_size,
-                                 early_stop=20,
+                                 early_stop=10,
                                  tr_x=tr_x,
                                  tr_y=tr_y,
                                  te_x=te_x,
@@ -269,14 +267,15 @@ def classification_exp(embs, hdataset, hparams):
                               'dropout': hparams.dropout})
 
     # run the model!
-    results = train_classifier(hdataset.name,
+    exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
+    results = train_classifier(exp_name,
                                embs,
                                neural_constructor,
                                neural_kwargs,
                                lr=hparams.lr,
-                               n_epochs=100,
+                               n_epochs=hparams.epochs,
                                mb_size=hparams.mb_size,
-                               early_stop=20,
+                               early_stop=10,
                                tr_x=tr_x,
                                tr_y=tr_y,
                                te_x=te_x,
@@ -319,7 +318,7 @@ def main():
             SIMILARITY: similarity_exp,
             BROWN_POS: seq_labelling_exp,
             WSJ_POS: seq_labelling_exp,
-            CHUNKING: seq_labelling_exp,
+            # CHUNKING: seq_labelling_exp,
             SENTIMENT: classification_exp,
             NEWS: classification_exp,
             ANALOGY: analogy_exp,
