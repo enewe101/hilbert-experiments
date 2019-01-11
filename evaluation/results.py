@@ -52,6 +52,20 @@ class ResultsHolder(object):
                     spacing*2, self._str_format(key), value, fill=max_res_len)
         return s
 
+    def get_csv_str(self):
+        s = [['dsname']]
+        for ds, res in self.items():
+            s.append([ds])
+            need_header = len(s[0]) == 1
+
+            for key, value in res.items():
+                if type(value) == list:
+                    continue
+                if need_header:
+                    s[0].append(str(key))
+                s[-1].append(str(value))
+        return '\n'.join([','.join(row) for row in s])
+        
     def get_new_res_f(self, d):
         crt = 0
         for f in os.listdir(d):
@@ -64,6 +78,8 @@ class ResultsHolder(object):
     def serialize(self, write_dir, params_str):
         res_f = self.get_new_res_f(write_dir)
         with open(res_f, 'w') as f:
+            f.write(self.get_csv_str())
+            f.write('\n\n\n\n')
             f.write(params_str)
             f.write('\n\n')
             f.write(self.get_pretty_string())
