@@ -344,7 +344,7 @@ def main():
                 if hparams.repeat == 1:
                     mean_results = results
                 else:
-                    got_res = {**results['full'].items()}
+                    got_res = {**results.results_by_dataset['full']}
                     mean_results.add_ds_results(f'seed {hparams.seed}', got_res)
 
             mean_results.serialize(emb_path, params_str)

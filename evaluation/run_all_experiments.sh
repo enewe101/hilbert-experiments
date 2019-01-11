@@ -39,7 +39,7 @@ elif [[ $3 == "bilstm" ]]; then
 fi
 
 # analogy experiments first
-start="python $1 $2 --base /"
+start="python run_experiments.py $1 $2 --base /"
 
 if [[ $2 == "analogy" ]]; then
     cmd="$start"
@@ -57,3 +57,4 @@ fi
 
 echo "We will be running the following command:"
 echo $cmd
+$cmd
