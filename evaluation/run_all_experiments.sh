@@ -36,6 +36,7 @@ elif [[ $3 == "ffnn" ]]; then
     modelstr="--model_str ffnn --dropout 0.5 --schedule_lr --hdim1 128 --hdim2 128"
 elif [[ $3 == "bilstm" ]]; then
     modelstr="--model_str bilstm $pos"
+    mlargs="--lr 0.001 --mb_size 64 --epochs 25"
 fi
 
 # analogy experiments first
