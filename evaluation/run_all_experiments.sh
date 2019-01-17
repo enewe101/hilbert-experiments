@@ -55,6 +55,6 @@ else
     exit 1
 fi
 
-echo "We will be running the following command:"
+#echo "We will be running the following command:"
 echo $cmd
-$cmd
+#$cmd

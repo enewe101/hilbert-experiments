@@ -70,12 +70,22 @@ class ResultsHolder(object):
         crt = 0
         for f in os.listdir(d):
             if f.startswith(self.name):
-                num = f.split('_')[-1].rstrip(self.extension)
-                crt = max(crt, int(num))
+                idx = -1
+                for i, x in enumerate(f.split('_')):
+                    try: 
+                        int(x.rstrip(self.extension))
+                        idx = i
+                    except Exception: continue
+                if idx >= 0:
+                    num = f.split('_')[i].rstrip(self.extension)
+                    crt = max(crt, int(num))
         newf = '{}_{}{}'.format(self.name, crt+1, self.extension)
         return os.path.join(d, newf)
 
     def serialize(self, write_dir, params_str):
+        if not os.path.exists(write_dir):
+            os.makedirs(write_dir)
+
         res_f = self.get_new_res_f(write_dir)
         with open(res_f, 'w') as f:
             f.write(self.get_csv_str())

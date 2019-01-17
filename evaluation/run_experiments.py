@@ -1,4 +1,5 @@
 import hilbert
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -340,6 +341,9 @@ def main():
 
                 # run it and get the results!
                 results = exp(emb, datasets[expname], hparams)
+
+                # save temp results
+                results.serialize(os.path.join(emb_path, 'tmpres/'), params_str)
 
                 if hparams.repeat == 1:
                     mean_results = results

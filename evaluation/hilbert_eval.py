@@ -57,7 +57,7 @@ def load_embeddings_as_hilbert(path, verbose=True, avg_vw=False):
 
     if verbose:
         print('Loading regular embeddings...')
-    return load_embeddings(path, avg_vw)
+    return load_embeddings(path, avg_vw=avg_vw)
 
 
 def get_best(epochs_res):
