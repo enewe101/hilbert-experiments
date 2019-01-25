@@ -10,6 +10,7 @@ class SequenceLoader(object):
 
         # needs to be pre-sorted in decreasing order
         assert len(X_seqs[0]) > len(X_seqs[-1])
+        assert mb_size > 1
 
         # we will be storing the sequences onto the GPU, sorted into MBs
         self.bsz = mb_size

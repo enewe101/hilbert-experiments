@@ -1,4 +1,5 @@
 import hilbert
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -13,6 +14,41 @@ from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
 
 
+# to help with dealing with averaging vectors and covectors
+class EmbWrapper(object):
+    def __init__(self, hembs, avg_vw=False):
+        self.dictionary = hembs.dictionary
+        self.matrix = hembs.V
+        self.dim = len(self.matrix[0])
+        self.unk = hembs.unk
+        if avg_vw:
+            if hembs.W is not None:
+                self.matrix += hembs.W
+                self.matrix /= 2.
+            else:
+                print('(weak warning) no covectors found!')
+
+    def get_id(self, w):
+        return self.dictionary.get_id(w)
+
+    def get_emb(self, w):
+        try:
+            idx = self.dictionary.get_id(w)
+            return self.matrix[idx]
+        except KeyError:
+            return self.unk
+
+    def get_token(self, idx):
+        return self.dictionary.get_token(idx)
+
+    def has_w(self, w):
+        return w in self.dictionary
+
+    def has_nan(self):
+        return any(np.isnan(self.matrix[0]))
+
+
+
 # little helper
 def cossim(v1, v2):
     dot = v1.dot(v2)
@@ -20,14 +56,13 @@ def cossim(v1, v2):
 
 
 # Beginning of our experimental code.
-def similarity_exp(embs, hdataset, hparams, avg_vw=False, verbose=True):
+def similarity_exp(embs, hdataset, hparams, verbose=True):
     """
     Runs all 11 of the word similarity experiments on the set of
     embeddings passed to it.
-    :param embs: Embeddings class, a hilbert embeddings object.
+    :param embs: EmbWrapper class, a wrapper for hilbert embeddings object.
     :param hdataset: HilbertDataset object
     :param hparams: unused - kept for interface functionality
-    :param avg_vw: set to True to average the vectors and covectors together
     :param verbose: print or not
     :return: ResultsHolder object
     """
@@ -39,22 +74,18 @@ def similarity_exp(embs, hdataset, hparams, avg_vw=False, verbose=True):
 
     # iterate over all the similarity datasets in the object
     for dname, samples in hdataset.items():
+        if dname == 'semeval17task2_trial':
+            continue # don't do this shitty one as it only has 18 samples!
+
         similarities = []
         gold = []
         had_coverage = []
         for w1, w2, gold_score in samples:
-            had_coverage.append(w1 in embs.dictionary and w2 in embs.dictionary)
+            had_coverage.append(embs.has_w(w1) and embs.has_w(w2))
             gold.append(gold_score)
 
-            e1 = embs.get_vec(w1, oov_policy='unk')
-            e2 = embs.get_vec(w2, oov_policy='unk')
-
-            if avg_vw:
-                e1 += embs.get_covec(w1, oov_policy='unk')
-                e2 += embs.get_covec(w2, oov_policy='unk')
-                e1 /= 2
-                e2 /= 2
-
+            e1 = embs.get_emb(w1)
+            e2 = embs.get_emb(w2)
             similarities.append(cossim(e1, e2).item())
 
         covered = [(p, g) for i, (p, g) in enumerate(zip(similarities,gold)) if had_coverage[i]]
@@ -79,7 +110,7 @@ def analogy_exp(embs, hdataset, hparams):
     results = ResultsHolder(ANALOGY)
 
     # normalize for faster sim calcs.
-    embs.V = F.normalize(embs.V, p=2, dim=1)
+    embs.matrix = F.normalize(embs.matrix, p=2, dim=1)
     
     # for showing over time
     total_iter = sum(len(samples) for samples in hdataset.values())
@@ -98,16 +129,16 @@ def analogy_exp(embs, hdataset, hparams):
         for i, (w1, w2, w3, w4) in enumerate(samples):
             if i % iter_step == 0: bar.next(n=iter_step)
 
-            if not w4 in embs.dictionary:
+            if not embs.has_w(w4):
                 missing_answer += 1
                 continue
 
-            e1 = embs.get_vec(w1, oov_policy='unk').reshape(-1, 1)
-            e2 = embs.get_vec(w2, oov_policy='unk').reshape(-1, 1)
-            e3 = embs.get_vec(w3, oov_policy='unk').reshape(-1, 1)
+            e1 = embs.get_emb(w1).reshape(-1, 1)
+            e2 = embs.get_emb(w2).reshape(-1, 1)
+            e3 = embs.get_emb(w3).reshape(-1, 1)
 
             # get cos sims for each of them with the dataset
-            sim_all = embs.V.mm(torch.cat([e1, e2, e3], dim=1))
+            sim_all = embs.matrix.mm(torch.cat([e1, e2, e3], dim=1))
 
             # calculuate 3cosadd
             cos_add = sim_all[:,1] + sim_all[:,2] - sim_all[:,0]
@@ -121,7 +152,7 @@ def analogy_exp(embs, hdataset, hparams):
             have_all_embs = True
             for wi in (w1, w2, w3):
                 try:
-                    w_id = embs.dictionary.get_id(wi)
+                    w_id = embs.get_id(wi)
                     cos_add[w_id] = -np.inf
                     cos_mul[w_id] = -np.inf
                 except KeyError:
@@ -129,8 +160,8 @@ def analogy_exp(embs, hdataset, hparams):
                     have_all_embs = False
 
             # get the best with argmax
-            best_w_add = embs.dictionary.get_token(cos_add.argmax())
-            best_w_mul = embs.dictionary.get_token(cos_mul.argmax())
+            best_w_add = embs.get_token(cos_add.argmax())
+            best_w_mul = embs.get_token(cos_mul.argmax())
 
             # count up for final accuracy
             correct_cosadd += 1 if w4 == best_w_add else 0
@@ -154,9 +185,7 @@ def analogy_exp(embs, hdataset, hparams):
     return results
 
 
-# TODO: write code to tune the hyperparams of ALL of the models.
 # TODO: add CRF on top of the LSTM predictions.
-# TODO: serialize results systematically.
 # TODO: improve documentation.
 
 def seq_labelling_exp(embs, hdataset, hparams):
@@ -188,9 +217,9 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  neural_constructor,
                                  neural_kwargs,
                                  lr=hparams.lr,
-                                 n_epochs=250,
+                                 n_epochs=hparams.epochs,
                                  mb_size=hparams.mb_size,
-                                 early_stop=20,
+                                 early_stop=10,
                                  tr_x=tr_x,
                                  tr_y=tr_y,
                                  te_x=te_x,
@@ -239,14 +268,15 @@ def classification_exp(embs, hdataset, hparams):
                               'dropout': hparams.dropout})
 
     # run the model!
-    results = train_classifier(hdataset.name,
+    exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
+    results = train_classifier(exp_name,
                                embs,
                                neural_constructor,
                                neural_kwargs,
                                lr=hparams.lr,
-                               n_epochs=250,
+                               n_epochs=hparams.epochs,
                                mb_size=hparams.mb_size,
-                               early_stop=20,
+                               early_stop=10,
                                tr_x=tr_x,
                                tr_y=tr_y,
                                te_x=te_x,
@@ -257,12 +287,12 @@ def classification_exp(embs, hdataset, hparams):
 
 
 #### utility functions ###
-def load_embeddings(path, device=None):
+def load_embeddings(path, device=None, avg_vw=False):
     e = hilbert.embeddings.Embeddings.load(path,
             device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
         e.V = e.V.transpose(0, 1)
-    return e
+    return EmbWrapper(e, avg_vw)
 
 
 def get_all_words(list_of_hdatasets):
@@ -272,31 +302,59 @@ def get_all_words(list_of_hdatasets):
     return list(sorted(vocab.items(), key=lambda t: t[1]))
 
 
-
-if __name__ == '__main__':
-    ## Adding m_ to all variable names to indicate they only belong in main, not globals.
-    m_hparams = HParams() # parses args
+def main():
+    hparams = HParams() # parses args
 
     # load up the datasets and get the vocab we will need.
     print('Loading datasets...')
-    m_datasets = np.load('np/all_data.npz')['arr_0'][0]
+    datasets = np.load('np/all_data.npz')['arr_0'][0]
 
-    print('Loading embeddings...')
-    m_emb = load_embeddings(m_hparams.emb_path)
+    for emb_path in hparams.iter_emb_paths():
+        print(f'Loading embeddings from {emb_path}..')
+        emb = load_embeddings(emb_path, avg_vw=hparams.avgvw)
+        if hparams.avgvw:
+            print('-- averaging vectors and covectors --')
 
-    m_names_to_fun = {
-        SIMILARITY: similarity_exp,
-        ANALOGY: analogy_exp,
-        BROWN_POS: seq_labelling_exp,
-        WSJ_POS: seq_labelling_exp,
-        CHUNKING: seq_labelling_exp,
-        SENTIMENT: classification_exp,
-        NEWS: classification_exp,
-    }
+        names_to_fun = {
+            SIMILARITY: similarity_exp,
+            BROWN_POS: seq_labelling_exp,
+            WSJ_POS: seq_labelling_exp,
+            # CHUNKING: seq_labelling_exp,
+            SENTIMENT: classification_exp,
+            NEWS: classification_exp,
+            ANALOGY: analogy_exp,
+        }
 
-    m_exp = m_names_to_fun[m_hparams.experiment]
-    m_ds = m_datasets[m_hparams.experiment]
-    m_results = m_exp(m_emb, m_ds, m_hparams)
+        for expname, exp in names_to_fun.items():
+            if hparams.experiment != 'all' and expname != hparams.experiment:
+                continue
 
-    # TODO: formalize results serialization
-    m_results.pretty_print()
+            # we may be running repeated experiments
+            mean_results = ResultsHolder(expname)
+            params_str = hparams.get_params_str()
+            for i in range(hparams.repeat):
+
+                # set the seed right before running experiment
+                hparams.seed += (i * 1917)
+                np.random.seed(hparams.seed)
+                torch.random.manual_seed(hparams.seed)
+
+                # run it and get the results!
+                results = exp(emb, datasets[expname], hparams)
+
+                # save temp results
+                results.serialize(os.path.join(emb_path, 'tmpres/'), params_str)
+
+                if hparams.repeat == 1:
+                    mean_results = results
+                else:
+                    got_res = {**results.results_by_dataset['full']}
+                    mean_results.add_ds_results(f'seed {hparams.seed}', got_res)
+
+            mean_results.serialize(emb_path, params_str)
+
+
+
+
+if __name__ == '__main__':
+    main()

@@ -31,7 +31,7 @@ def update_res(old_res, iter_resholder, iterp, rkey='full-spearman'):
     old_score = np.mean(old_vals)
 
     # make sure these are results from all 12 similarity datasets
-    assert len(old_vals) == len(iter_vals) == 12
+    assert len(old_vals) == len(iter_vals) and len(iter_vals) >= 10
 
     # now compare and update if necessary
     if iter_score > old_score:
