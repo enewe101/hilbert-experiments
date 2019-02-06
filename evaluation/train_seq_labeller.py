@@ -1,9 +1,8 @@
-import torch
-import numpy as np
+from collections import defaultdict
 from torch.optim import lr_scheduler
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from collections import defaultdict
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
 from evaluation.train_classifier import sort_by_length
 from evaluation.torch_model import SeqLabLSTM
 from evaluation.results import ResultsHolder
@@ -14,7 +13,7 @@ from evaluation.seq_batch_loader import SequenceLoader
 MAX_MB_SIZE = 1024
 
 
-def feed_full_seq_ds(neural_model, seqloader):
+def feed_full_seq_ds(neural_model, seqloader, sst_labels=None):
     # iterate over the dataset to compute the accuracy
     correct, total = 0, 0
     for tok_seqs, pads, label_seq in seqloader:
@@ -31,12 +30,18 @@ def feed_full_seq_ds(neural_model, seqloader):
         # must be same length, if everything went correctly
         gold_labels = label_seq[label_seq != SeqLabLSTM.PADDING_LABEL_ID]
         assert len(label_preds) == len(gold_labels)
+        
+        # to deal with SST-Labels, where we need to do micro F1 instead to ignore
+        # the TP 0 labels, which pollute the accuracy computation
+        if sst_labels is not None:
+            acc = f1_score(gold_labels, label_preds, labels=sst_labels, average='micro')
+        else:
+            # count the correct predictions, basic accuracy computation
+            correct += (label_preds == gold_labels).sum().item()
+            total += len(label_preds)
+            acc = correct / total
 
-        # count the correct predictions
-        correct += (label_preds == gold_labels).sum().item()
-        total += len(label_preds)
-
-    return correct / total
+    return acc
 
 
 def train_seq_labeller(exp_name, h_embs, constr, kw_params,
@@ -44,6 +49,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
                        tr_x, tr_y, te_x, te_y,
                        schedule_lr=False,
                        normalize_gradient=False,
+                       sst_labels=None,
                        verbose=True):
     """
     Main function to train any classifier object.
@@ -61,6 +67,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
     :param te_y: test set y from a Hilbert dataset
     :param schedule_lr: use a plateau-based scheduled learning rate
     :param normalize_gradient: perform gradient normalization, making max norm be 1
+    :param sst_labels: the relevant labels for supersense tagging (if we're doing it)
     :param verbose: if true, display everything at every epoch
     :return: results
     """
@@ -130,9 +137,9 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
         with torch.no_grad():
             model.eval()
             # bigger mbsize for test set because we want to go through it as fast as possible
-            train_acc = feed_full_seq_ds(model, tr_loader)
-            val_acc = feed_full_seq_ds(model, val_loader)
-            test_acc = feed_full_seq_ds(model, te_loader)
+            train_acc = feed_full_seq_ds(model, tr_loader, sst_labels)
+            val_acc = feed_full_seq_ds(model, val_loader, sst_labels)
+            test_acc = feed_full_seq_ds(model, te_loader, sst_labels)
 
             for acc, string in zip([train_acc, val_acc, test_acc], ['train', 'val', 'test']):
                 results['{}_acc'.format(string)].append(acc)

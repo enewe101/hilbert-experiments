@@ -198,11 +198,18 @@ def seq_labelling_exp(embs, hdataset, hparams):
     :param hparams: HParams
     :return: ResultsHolder
     """
-   
+
     # get the training data
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=True)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=True)
 
+    # deal with supersense-specific label evaluation (still have 0 label for output layer though!)
+    sst_labels = None
+    if 'sst' in hdataset.name:
+        sst_labels = set(hdataset.labels_to_idx.values())
+        sst_labels.remove(hdataset.ignore_idx)
+        assert hdataset.ignore_idx > 0
+    
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token
     neural_constructor = SeqLabLSTM
@@ -226,6 +233,7 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  te_y=te_y,
                                  normalize_gradient=hparams.normalize_gradient,
                                  schedule_lr=hparams.schedule_lr,
+                                 sst_labels=sst_labels,
                                  verbose=True,)
     return results
 
