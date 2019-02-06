@@ -15,7 +15,7 @@ MAX_MB_SIZE = 1024
 
 
 def feed_full_seq_ds(neural_model, seqloader, sst_labels=None):
-    doing_sst = sst_labels is not None and False
+    doing_sst = sst_labels is not None 
 
     # iterate over the dataset to compute the accuracy
     all_gold_labels = []
