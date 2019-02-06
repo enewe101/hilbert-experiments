@@ -24,7 +24,7 @@ def read_trace(pth):
 def load_traces(gs_prefix):
     traces = {}
     for f in os.listdir(BASE):
-        if f.startswith(gs_prefix):
+        if f == gs_prefix: #f.startswith(gs_prefix):
             pth = os.path.join(BASE, f)
             try:
                 tr = read_trace(os.path.join(pth, 'trace.txt'))
