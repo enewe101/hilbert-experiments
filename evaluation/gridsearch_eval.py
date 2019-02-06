@@ -76,7 +76,7 @@ def get_best(exp_path, check=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('gs', type=str, help='prefix of the gridsearch')
-    parser.add_argument('--base', type=str, default='/home/kiankd/scratch/hilbert-data/embeddings')
+    parser.add_argument('--base', type=str, default='/home/enewel3/scratch/hilbert-data/embeddings')
     parser.add_argument('--todo', action='store_true', help='find empty unanalyzed runs')
     args = parser.parse_args()
 
@@ -98,13 +98,13 @@ def main():
     if args.todo:
         emptys = [exp for exp in results if results[exp] == EMPTY]
         print('Number of empty runs:', len(emptys))
-        with open('/home/kiankd/naacl2019/runs_todo.txt', 'w') as f:
+        with open('/home/enewel3/naacl2019/runs_todo.txt', 'w') as f:
             for e in emptys:
                 f.write(f'{e}\n')
         exit(0)
 
     nans = 0
-    with open(f'/home/kiankd/naacl2019/{args.gs}.csv', 'w') as csvf:
+    with open(f'/home/enewel3/naacl2019/{args.gs}.csv', 'w') as csvf:
         csvf.write('experiment name,{}\n'.format(','.join(header)))
         for exp, res in results.items():
             try:

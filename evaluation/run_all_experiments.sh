@@ -36,7 +36,7 @@ elif [[ $3 == "ffnn" ]]; then
     modelstr="--model_str ffnn --dropout 0.5 --schedule_lr --hdim1 128 --hdim2 128"
 elif [[ $3 == "bilstm" ]]; then
     modelstr="--model_str bilstm $pos"
-    mlargs="--lr 0.001 --mb_size 64 --epochs 25"
+    mlargs="--lr 0.001 --mb_size 64 --epochs 50"
 fi
 
 # analogy experiments first
@@ -45,8 +45,8 @@ start="python run_experiments.py $1 $2 --base /"
 if [[ $2 == "analogy" ]]; then
     cmd="$start"
 
-elif [[ $2 == "brown-pos" || $2 == "wsj-pos" || $2 == 'sst' ]]; then
-    cmd="$start $mlargs $pos --repeat 10"
+elif [[ $2 == "brown-pos" || $2 == "wsj-pos" || $2 == "sst" ]]; then
+    cmd="$start $pos --lr 0.001 --mb_size 64 --epochs 40 --repeat 10"
 
 elif [[ $2 == "news" || $2 == "sentiment" ]]; then
     cmd="$start $mlargs $modelstr --repeat 10"

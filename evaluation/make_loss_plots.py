@@ -9,6 +9,7 @@ from hilbert_histograms import save_figure
 
 
 BASE = shared.CONSTANTS.EMBEDDINGS_DIR
+print(BASE)
 
 
 def read_trace(pth):
@@ -42,7 +43,7 @@ def filter_by_lr(keys):
         lr = lr_s.lstrip('-l').replace('e', 'e-').replace('p', '.')
         lr = float(lr)
         
-        mb_s = re.search(r'-u[^-]*', k).group(0)
+        mb_s = re.search(r'-u[^-]*', k+'-u1').group(0)
         mb = mb_s.lstrip('-u').replace('e', 'e-').replace('p', '.')
         mb = float(mb)
 
