@@ -1,3 +1,4 @@
+import torch
 from collections import defaultdict
 from torch.optim import lr_scheduler
 from torch.nn.utils.clip_grad import clip_grad_norm_
@@ -14,8 +15,13 @@ MAX_MB_SIZE = 1024
 
 
 def feed_full_seq_ds(neural_model, seqloader, sst_labels=None):
+    doing_sst = sst_labels is not None and False
+
     # iterate over the dataset to compute the accuracy
+    all_gold_labels = []
+    all_label_preds = []
     correct, total = 0, 0
+
     for tok_seqs, pads, label_seq in seqloader:
 
         # get the yhat prediction matrix for each sample in sequence
@@ -33,15 +39,18 @@ def feed_full_seq_ds(neural_model, seqloader, sst_labels=None):
         
         # to deal with SST-Labels, where we need to do micro F1 instead to ignore
         # the TP 0 labels, which pollute the accuracy computation
-        if sst_labels is not None:
-            acc = f1_score(gold_labels, label_preds, labels=sst_labels, average='micro')
+        if doing_sst:
+            all_gold_labels += list(gold_labels.cpu().numpy())
+            all_label_preds += list(label_preds.cpu().numpy())
         else:
             # count the correct predictions, basic accuracy computation
             correct += (label_preds == gold_labels).sum().item()
             total += len(label_preds)
-            acc = correct / total
 
-    return acc
+    if doing_sst:
+        return f1_score(all_gold_labels, all_label_preds, labels=sst_labels, average='micro')
+    else:
+        return correct / total
 
 
 def train_seq_labeller(exp_name, h_embs, constr, kw_params,

@@ -209,6 +209,7 @@ def seq_labelling_exp(embs, hdataset, hparams):
         sst_labels = set(hdataset.labels_to_idx.values())
         sst_labels.remove(hdataset.ignore_idx)
         assert hdataset.ignore_idx > 0
+        sst_labels = sorted(list(sst_labels))
     
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token

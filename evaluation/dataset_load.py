@@ -155,7 +155,8 @@ class HilbertDataset(object):
 
                 # set the y labels
                 if type(yval) == list:
-                    labs_idx.append([self.labels_to_idx[lab] for lab in yval])
+                    # put a blank if the label wasn't in training (this only happens once, for I.noun.Tops, which occurs once)
+                    labs_idx.append([self.labels_to_idx[lab] if lab in self.labels_to_idx else self.ignore_idx for lab in yval])
                     assert all(idx >= label_translate for idx in labs_idx[-1])  # all labels MUST start at 1 (padding is 0)
                 else:
                     labs_idx.append(self.labels_to_idx[yval])
