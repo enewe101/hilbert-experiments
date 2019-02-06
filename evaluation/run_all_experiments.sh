@@ -45,7 +45,7 @@ start="python run_experiments.py $1 $2 --base /"
 if [[ $2 == "analogy" ]]; then
     cmd="$start"
 
-elif [[ $2 == "brown-pos" || $2 == "wsj-pos" || $2 == "sst" ]]; then
+elif [[ $2 == "brown-pos" || $2 == "wsj-pos" || $2 == "semcor-sst" ]]; then
     cmd="$start $pos --lr 0.001 --mb_size 64 --epochs 40 --repeat 10"
 
 elif [[ $2 == "news" || $2 == "sentiment" ]]; then
