@@ -1,0 +1,5 @@
+/home/kiankd/scratch/hilbert-data/embeddings/HBT-GLV-FINAL-v40k
+/home/kiankd/scratch/hilbert-data/embeddings/HBT-W2V-FINAL-v40k
+/home/kiankd/scratch/hilbert-data/embeddings/STD-GLV-FINAL-v40k
+/home/kiankd/scratch/hilbert-data/embeddings/STD-W2V-FINAL-v40k
+/home/kiankd/scratch/hilbert-data/embeddings/HBT-MLE-FINAL-v40k

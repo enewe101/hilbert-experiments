@@ -327,6 +327,7 @@ def main():
             SIMILARITY: similarity_exp,
             BROWN_POS: seq_labelling_exp,
             WSJ_POS: seq_labelling_exp,
+            SST: seq_labelling_exp,
             # CHUNKING: seq_labelling_exp,
             SENTIMENT: classification_exp,
             NEWS: classification_exp,
