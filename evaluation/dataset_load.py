@@ -1,4 +1,5 @@
 import nltk
+import os
 import numpy as np
 import argparse
 from collections import defaultdict
@@ -32,6 +33,7 @@ class HilbertDataset(object):
         self._test = []
         self._all = {}
         self.labels_to_idx = {}
+        self.ignore_idx = -1000 # for SST, needs to correspond to the 0 label
 
 
     def add_full(self, data_list, ds_name=''):
@@ -131,6 +133,8 @@ class HilbertDataset(object):
         # set our label-to-idx storage if it has not been set before
         if set_indices:
             self.labels_to_idx = {l: i + label_translate for i, l in enumerate(unique_labs)}
+            if 'sst' in self.name:
+                self.ignore_idx = self.labels_to_idx['0']
 
         # return a list of indicies of labels, rather than the string labels themselves
         if as_indicies:
@@ -274,6 +278,25 @@ def load_wsj_pos_tagging():
     return dataset
 
 
+def load_semcor_sst_tagging():
+    """
+    Returns a full list representing the Semcor3.0 supersense datset.
+        Each item is a sentence built of (word, tag) tuples.
+    """
+    dataset = HilbertDataset('semcor-sst', is_unsupervised=False)
+    path = os.path.join(SUP_DIR, 'semcor-sst.txt')
+    sents_tags = []
+    with open(path, 'r') as f:
+        for line in f:
+            sent = []
+            for pair in line.split('\t'):
+                word, tag = pair.split(' ')
+                sent.append((word.lower(), tag.rstrip('\n'),))
+            sents_tags.append(sent)
+    dataset.add_full(sents_tags)
+    return dataset
+
+
 def load_chunking():
     """
     Returns a dictionary for the train and test sets.
@@ -327,7 +350,8 @@ def load_all():
         load_analogies(),
         load_brown_pos_tagging(),
         load_wsj_pos_tagging(),
-        load_chunking(),
+        load_semcor_sst_tagging(),
+        #load_chunking(),
         load_sentiment(),
         load_news_classification(),
     ]
@@ -359,6 +383,29 @@ if __name__ == '__main__':
             def get_id(self, t):
                 return 0
 
+        # semcor ds tests
+        print('Semcor SST tagging')
+        pos = load_semcor_sst_tagging()
+        pos.split_train_test()
+        x, y = pos.get_x_y('train')
+        print(x[0:2])
+        print(y[0:2])
+        pos.get_stats('train')
+        # testing labelling
+        x, y = pos.get_x_y('train', ds_dict=TestDictionary(),
+                           as_indicies=True,
+                           translate_label_by_one=True)
+        uniques = set()
+        for label_list in y:
+            for label in label_list:
+                uniques.add(label)
+        for label_list in y:
+            for label in label_list:
+                assert 0 < label <= len(uniques)
+        print('LABEL IDX FOR 0:', pos.labels_to_idx['0'])
+        assert(pos.labels_to_idx['0'] == pos.ignore_idx)
+        print()
+
 
         # similarity ds tests
         sim_ds = load_similarity()
@@ -371,7 +418,6 @@ if __name__ == '__main__':
                 assert type(s[2] == float)
             print('\tExample: {}'.format(sample_list[15]))
         print('Similarity tests passed.\n')
-        exit(0)
 
         # analogytests
         analogy_ds = load_analogies()
