@@ -316,10 +316,10 @@ def main():
 
     # load up the datasets and get the vocab we will need.
     print('Loading datasets...')
-    datasets = np.load('np/all_data.npz')['arr_0'][0]
+    datasets = np.load(hparams.data_path)['arr_0'][0]
 
     for emb_path in hparams.iter_emb_paths():
-        print(f'Loading embeddings from {emb_path}..')
+        print('Loading embeddings from {}..'.format(emb_path))
         emb = load_embeddings(emb_path, avg_vw=hparams.avgvw)
         if hparams.avgvw:
             print('-- averaging vectors and covectors --')
@@ -359,7 +359,8 @@ def main():
                     mean_results = results
                 else:
                     got_res = {**results.results_by_dataset['full']}
-                    mean_results.add_ds_results(f'seed {hparams.seed}', got_res)
+                    mean_results.add_ds_results(
+                        'seed {}'.format(hparams.seed), got_res)
 
             mean_results.serialize(emb_path, params_str)
 

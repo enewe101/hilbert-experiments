@@ -21,12 +21,12 @@ SVD_GAMMA = 0.
 def get_all_iters(path):
     iters = []
     for i, d in enumerate(reversed(sorted(os.listdir(path)))):
-        if os.path.isdir(f'{path}/{d}'):
+        if os.path.isdir('{}/{}'.format(path, d)):
             try:
                 prefix, iter_ = d.split('-')
-                iters.append((f'{path}/{d}', int(iter_)))
+                iters.append(('{}/{}'.format(path, d), int(iter_)))
             except ValueError:
-                iters.append((f'{path}/{d}', i))
+                iters.append(('{}/{}'.format(path, d), i))
     iters.sort(key=lambda t: t[1])
     return iters
 
