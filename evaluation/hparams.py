@@ -62,7 +62,6 @@ class HParams(object):
             '--mb_size', type=int, default=64, help='size of the minibatches')
         parser.add_argument(
             '--dropout', type=float, default=0., help='dropout probability')
-
         parser.add_argument(
             '--hdim1', type=int, default=256,
             help='specific dimensionality of a 1st hidden layer (not for RNNs)'

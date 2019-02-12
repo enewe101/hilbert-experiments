@@ -15,7 +15,8 @@ COLORS = ['xkcd:aqua', 'xkcd:blue', 'xkcd:green', 'xkcd:black',
 
 OVERWRITE_RESULTS = False
 SVD_GAMMA = 0.
-
+KIAN_PATH = (
+    '/home/enewel3/naacl2019/hilbert-experiments/evaluation/np/all_data.npz')
 ########## Helper functions ###########
 #---------                  ----------#
 def get_all_iters(path):
@@ -30,11 +31,10 @@ def get_all_iters(path):
     iters.sort(key=lambda t: t[1])
     return iters
 
-def get_evalfun_and_arg(run_eval):
+def get_evalfun_and_arg(run_eval, data_path=KIAN_PATH):
     if run_eval:
         print('Loading datasets for running tasks...')
-        h_datasets = np.load('/home/enewel3/naacl2019/'
-                'hilbert-experiments/evaluation/np/all_data.npz')['arr_0'][0]
+        h_datasets = np.load(data_path)['arr_0'][0]
         simds = h_datasets['similarity']
         eval_fun, eval_arg = evaluate_embs, simds
     else:
@@ -48,10 +48,10 @@ def load_embeddings_as_hilbert(path, verbose=True, avg_vw=False):
     # if this is the case, we are doing SVD and need to do special loading
     if 's.npy' in os.listdir(path):
         if verbose:
-            print(f'Loading svd with gamma={SVD_GAMMA}...')
-        vals = np.load(f'{path}/s.npy')
-        vecs = np.load(f'{path}/U.npy')
-        dictionary = Dictionary.load(f'{path}/dictionary')
+            print('Loading svd with gamma={}...'.format(SVD_GAMMA))
+        vals = np.load('{}/s.npy'.format(path))
+        vecs = np.load('{}/U.npy'.format(path))
+        dictionary = Dictionary.load('{}/dictionary'.format(path))
         svd_vectors = vecs @ np.diag(vals ** SVD_GAMMA)
         return Embeddings(svd_vectors, dictionary=dictionary, device='cpu')
 
@@ -105,7 +105,7 @@ def evaluate_embs(path, dataset, avg_vw=False):
         embs = load_embeddings_as_hilbert(path, avg_vw=avg_vw)
         if embs.has_nan():
             results = None
-            print(f'Warning! NAN for {path}')
+            print('Warning! NAN for {}'.format(path))
         else:
             try:
                 results = similarity_exp(embs, dataset, None)
@@ -113,25 +113,29 @@ def evaluate_embs(path, dataset, avg_vw=False):
                 print('NAN results')
                 results = None
     else:
-        raise NotImplementedError(f'Lazy, did not implement results for \"{dataset.name}\"!')
+        raise NotImplementedError(
+            'Lazy, did not implement results for \"{}\"!'.format(dataset.name))
 
-    print(f'{path} - running similarity exp...')
+    print('{} - running similarity exp...'.format(path))
     nancheck = '_NAN' if results is None else ''
-    np.save(f'{path}/{dataset.name}{nancheck}', np.array([results]))
+    np.save(
+        '{}/{}{}'.format(path, dataset.name, nancheck),
+        np.array([results])
+    )
     return results
 
 
 def load_emb_results(path, dsname):
     for fname in os.listdir(path):
-        if fname == f'{dsname}.npy':
-            return np.load(f'{path}/{fname}')[0]
+        if fname == '{}.npy'.format(dsname):
+            return np.load('{}/{}'.format(path, fname))[0]
     try:
-        for fname in os.listdir(f'{path}/vectors-final'):
-            if fname == f'{dsname}.npy':
-                return np.load(f'{path}/vectors-final/{fname}')[0]
+        for fname in os.listdir('{}/vectors-final'.format(path)):
+            if fname == '{}.npy'.format(dsname):
+                return np.load('{}/vectors-final/{}'.format(path, fname))[0]
     except FileNotFoundError:
         pass
-    raise FileNotFoundError(f'No results for {path} computed yet!')
+    raise FileNotFoundError('No results for {} computed yet!'.format(path))
 
 
 def plot_performance(results_list, epochs, save_path='', targs=None, reskey='full-spearman'):
@@ -227,7 +231,8 @@ def compare_and_save(sample_res, target_res, save_path, reskey='full-spearman'):
     print('Average relative difference between \"{}\" and target: '
           '{:2.2f}%'.format(save_path, 100 * errors_by_ds['mean']))
 
-    np.save(f'{save_path}/similarity_comparison', np.array([errors_by_ds]))
+    np.save(
+        '{}/similarity_comparison'.format(save_path), np.array([errors_by_ds]))
 
 
 ########## SVD things ###########
@@ -237,7 +242,7 @@ def svd_tests(base_dir, dataset, sample_name='', reskey='full-spearman'):
     std_paths = []
     hbt_paths = []
     for fname in os.listdir(base_dir):
-        path = f'{base_dir}/{fname}'
+        path = '{}/{}'.format(base_dir, fname)
         if fname.startswith('std-svd'):
             std_paths.append(path)
         elif fname.startswith('hbt-svd'):
@@ -246,9 +251,9 @@ def svd_tests(base_dir, dataset, sample_name='', reskey='full-spearman'):
     all_avg = {}
     for path in std_paths:
         if sample_name in path:
-            vals = np.load(f'{path}/s.npy')
-            vecs = np.load(f'{path}/U.npy')
-            dictionary = Dictionary.load(f'{path}/dictionary')
+            vals = np.load('{}/s.npy'.format(path))
+            vecs = np.load('{}/U.npy'.format(path))
+            dictionary = Dictionary.load('{}/dictionary'.format(path))
             all_res = defaultdict(lambda: [])
             avgs = []
             for gamma in [0, 0.5, 1]:
@@ -264,19 +269,21 @@ def svd_tests(base_dir, dataset, sample_name='', reskey='full-spearman'):
             #     print('{:25}: {}'.format(key, ', '.join(map(lambda x: '{:.4f}'.format(x), lst))))
             print(path)
             for gamma, avg in avgs:
-                print('\tGamma={:.2f}, average performance is: {:2.2f}%'.format(gamma, 100*avg))
-                all_avg[f'{path}_{gamma}'] = avg
+                print(
+                    '\tGamma={:.2f}, average performance is: {:2.2f}%'.format(
+                        gamma, 100*avg))
+                all_avg['{}_{}'.format(path, gamma)] = avg
     print()
     d = list(all_avg.items())
     d.sort(key=lambda t:t[1])
     d.reverse()
     for name, avg in d:
-        print(f'{name}: {avg}')
+        print('{}: {avg}'.format(name))
 
 
 def svd_comparison(sample_path, target_path, args):
     iter_files = get_all_iters(sample_path)
-    eval_fun, eval_arg = get_evalfun_and_arg(args.eval)
+    eval_fun, eval_arg = get_evalfun_and_arg(args.eval, args.data_path)
     target_results = eval_fun(target_path, eval_arg)
     final_results = run_iteration_testing(iter_files, eval_fun, eval_arg, target_results, args)
     if args.viz or args.save:
@@ -325,6 +332,10 @@ def main():
 
     parser.add_argument('--base', type=str, default='/home/rldata/hilbert-embeddings/embeddings',
                         help='base directory containg any embeddings we will be testing')
+    parser.add_argument(
+        '--data_path', type=str, default=KIAN_PATH, 
+        help='Path to evaluation datasets.'
+    )
 
     args = parser.parse_args()
     analyze_iters = len(args.sample) == 1
@@ -344,11 +355,11 @@ def main():
     # check if we want to do SVD
     if args.svd:
         if args.svdc:
-            sample_compare = f'{args.base}/{args.sample[0]}'
-            targ_compare = f'{args.base}/{args.svdc}'
+            sample_compare = '{}/{}'.format(args.base, args.sample[0])
+            targ_compare = '{}/{}'.format(args.base, args.svdc)
             svd_comparison(sample_compare, targ_compare, args)
         else:
-            _, simds = get_evalfun_and_arg(True)
+            _, simds = get_evalfun_and_arg(True, args.data_path)
             svd_tests(args.base, simds, sample_name=args.sample[0])
         return
 
@@ -356,7 +367,7 @@ def main():
     iter_files = None
     if analyze_iters:
         print('One target directory specified, analyzing its iterations...')
-        iter_files = get_all_iters(f'{args.base}/{args.sample[0]}')
+        iter_files = get_all_iters('{}/{}'.format(args.base, args.sample[0]))
         print(', will be processing {} files...'.format(len(iter_files)))
     else:
         print('Multiple target directories, analyzing final results...')
@@ -364,16 +375,17 @@ def main():
     # get the last files of the iters in each of the targets
     final_files = {}
     for d in args.sample:
-        files = get_all_iters(f'{args.base}/{d}') if iter_files is None else iter_files
+        files = get_all_iters(
+            '{}/{}'.format(args.base, d)) if iter_files is None else iter_files
         final_files[d] = files[-1][0] # just the file name, not epoch
 
     # may need to do the experiments on them
-    eval_fun, eval_arg = get_evalfun_and_arg(args.eval)
+    eval_fun, eval_arg = get_evalfun_and_arg(args.eval, args.data_path)
 
     # do the evaluation function & do the analysis after
     target_results = None
     if args.compareto:
-        targpath = f'{args.base}/{args.compareto}'
+        targpath = '{}/{}'.format(args.base, args.compareto)
         target_results = eval_fun(targpath, eval_arg)
 
     # here we need to apply the evaluation function to each iteration in the sample directory
