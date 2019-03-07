@@ -9,7 +9,7 @@ from evaluation.results import ResultsHolder
 from evaluation.seq_batch_loader import SequenceLoader
 
 
-MAX_MB_SIZE = 2048
+MAX_MB_SIZE = 1024
 
 def sort_by_length(x, y, reverse=False):
     sort_key = lambda xy_tuple: len(xy_tuple[0])
@@ -158,6 +158,7 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
                 scheduler.step(val_acc)
 
     # return the results!
+    del tr_loader, val_loader, te_loader
     results.update({'best_val_acc': best_val_acc,
                     'best_epoch': best_epoch,
                     'test_acc_at_best_epoch': results['test_acc'][best_epoch]})

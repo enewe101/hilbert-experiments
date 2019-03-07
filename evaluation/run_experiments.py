@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
+import time
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
 from dataset_load import HilbertDataset # required import to load numpy
@@ -335,14 +336,22 @@ def main():
             ANALOGY: analogy_exp,
         }
 
+        model_str = ''
+        if hparams.experiment in (NEWS, SENTIMENT):
+            model_str = '_' + hparams.model_str
+
         for expname, exp in names_to_fun.items():
             if hparams.experiment != 'all' and expname != hparams.experiment:
                 continue
 
             # we may be running repeated experiments
-            mean_results = ResultsHolder(expname)
+            mean_results = ResultsHolder(expname + model_str)
             params_str = hparams.get_params_str()
             for i in range(hparams.repeat):
+                
+                # flush the GPU and wait a second to reset everything
+                torch.cuda.empty_cache()
+                time.sleep(1)
 
                 # set the seed right before running experiment
                 hparams.seed += (i * 1917)

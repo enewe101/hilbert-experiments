@@ -179,6 +179,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
 
     hilb_res = ResultsHolder(exp_name)
     hilb_res.add_ds_results('full', results)
+    del tr_loader, val_loader, te_loader
     return hilb_res
 
 
