@@ -26,7 +26,6 @@ def do_plot(glove_results_dir, pmi_path, out_path):
     from matplotlib import rc
     rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 
-
     plot_visible_pmi(
         pmi_path, ax=ax1,
         line_args={'color':'0.5'},
@@ -146,6 +145,7 @@ def read_bias_frequency_pairs(in_path):
             log_freqs_normed.append(float(log_freq_normed_str))
             log_freqs.append(float(log_freq_str))
     return v_biases, w_biases, log_freqs_normed, log_freqs
+
 
 
 def calc_bias_frequency_pairs(bigram_path, glove_results_dir):
