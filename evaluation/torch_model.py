@@ -32,10 +32,10 @@ class EmbeddingModel(nn.Module):
         # combine them all
         _all_embs = torch.cat((h_embs.matrix.float(),
                                h_embs.unk.float().reshape(1, -1),
-                               _padding), dim=0)
+                               _padding), dim=0).to(HParams.DEVICE)
 
         # now, put the pretrained ones into them
-        self.torch_padding_id = torch.LongTensor([self.padding_id])
+        self.torch_padding_id = torch.LongTensor([self.padding_id]).to(HParams.DEVICE)
 
         # if we want to use zero padding we need this kwarg
         _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
@@ -47,7 +47,7 @@ class EmbeddingModel(nn.Module):
         if store_covecs:
             _covecs = torch.cat((h_embs.covecs.float(),
                                  h_embs.unk.float().reshape(1, -1),
-                                 _padding), dim=0)
+                                 _padding), dim=0).to(HParams.DEVICE)
             self.covec_embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg)
             self.embeddings.weight = nn.Parameter(_covecs, requires_grad=fine_tune)
 
