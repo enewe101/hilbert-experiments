@@ -9,7 +9,7 @@ from evaluation.results import ResultsHolder
 from evaluation.seq_batch_loader import SequenceLoader
 
 
-MAX_MB_SIZE = 2048
+MAX_MB_SIZE = 1024
 
 def sort_by_length(x, y, reverse=False):
     sort_key = lambda xy_tuple: len(xy_tuple[0])

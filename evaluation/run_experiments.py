@@ -3,9 +3,11 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
+from collections import defaultdict
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
 from dataset_load import HilbertDataset # required import to load numpy
+from sklearn.metrics import f1_score
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
 from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier
@@ -13,12 +15,44 @@ from evaluation.constants import *
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
 
+def flatten(double_l):
+    return [item for l in double_l for item in l]
+
+## helper for seq labelling
+def run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels):
+    # this baseline model predicts the most frequent tag as the correct one for each word
+    counts = defaultdict(lambda: defaultdict(lambda: 0))
+    most_most_freq = defaultdict(lambda: 0)
+    assert len(tr_x) == len(tr_y)
+    for words, labels in zip(tr_x, tr_y):
+        assert len(words) == len(labels) and len(words) > 0
+        for w, l in zip(words, labels):
+            counts[w][l] += 1
+            most_most_freq[l] += 1
+    most_most_freq = max(most_most_freq, key=most_most_freq.get)
+
+    most_freq = defaultdict(lambda: most_most_freq)
+    most_freq.update({w: max(counts[w], key=counts[w].get) for w in counts})
+    seq_preds = []
+    for words in te_x:
+        seq_preds.append([most_freq[w] for w in words])
+    
+    correct, total = 0, 0
+    for preds, golds in zip(seq_preds, te_y):
+        assert len(preds) == len(golds) and len(preds) > 0
+        correct += sum(p == g for p, g in zip(preds,golds))
+        total += len(preds)
+    f1 = f1_score(flatten(te_y), flatten(seq_preds), labels=sst_labels, average='micro')
+    print('Most frequent tag baseline: {:0.4f} accuracy'.format(correct / total))
+    print('                            {:0.4f} f1 score'.format(f1))
+
 
 # to help with dealing with averaging vectors and covectors
 class EmbWrapper(object):
     def __init__(self, hembs, avg_vw=False):
         self.dictionary = hembs.dictionary
         self.matrix = hembs.V
+        self.covecs = hembs.W
         self.dim = len(self.matrix[0])
         self.unk = hembs.unk
         if avg_vw:
@@ -38,6 +72,13 @@ class EmbWrapper(object):
         except KeyError:
             return self.unk
 
+    def get_covec(self, w):
+        try:
+            idx = self.dictionary.get_id(w)
+            return self.covecs[idx]
+        except KeyError:
+            return self.unk
+
     def get_token(self, idx):
         return self.dictionary.get_token(idx)
 
@@ -48,11 +89,11 @@ class EmbWrapper(object):
         return any(np.isnan(self.matrix[0]))
 
 
-
+# WARNING: using normal dot prdouct!!
 # little helper
 def cossim(v1, v2):
     dot = v1.dot(v2)
-    return dot / (v1.norm() * v2.norm())
+    return dot #/ (v1.norm() * v2.norm())
 
 
 # Beginning of our experimental code.
@@ -86,6 +127,7 @@ def similarity_exp(embs, hdataset, hparams, verbose=True):
 
             e1 = embs.get_emb(w1)
             e2 = embs.get_emb(w2)
+
             similarities.append(cossim(e1, e2).item())
 
         covered = [(p, g) for i, (p, g) in enumerate(zip(similarities,gold)) if had_coverage[i]]
@@ -210,7 +252,11 @@ def seq_labelling_exp(embs, hdataset, hparams):
         sst_labels.remove(hdataset.ignore_idx)
         assert hdataset.ignore_idx > 0
         sst_labels = sorted(list(sst_labels))
-    
+ 
+    # run the baseline algorithm
+    baseline_results = run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels)
+    exit(0)
+   
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token
     neural_constructor = SeqLabLSTM
