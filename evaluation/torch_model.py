@@ -11,7 +11,7 @@ class EmbeddingModel(nn.Module):
     Generic module that stores pre-trained embeddings for any
     other neural model we'll be implementing.
     """
-    def __init__(self, h_embs, fine_tune=True, zero_padding=False):
+    def __init__(self, h_embs, fine_tune=True, zero_padding=False, store_covecs=False):
         super(EmbeddingModel, self).__init__()
 
         _dim = h_embs.dim
@@ -23,28 +23,38 @@ class EmbeddingModel(nn.Module):
 
         # set up the padding embeddings
         if zero_padding:
-            _padding = torch.zeros(1, _dim).to(HParams.DEVICE)
+            _padding = torch.zeros(1, _dim)
         else:
             _padding = torch.from_numpy(np.random.normal(
                 -0.15, 0.15, _dim
-            )).reshape(1, -1).float().to(HParams.DEVICE)
+            )).reshape(1, -1).float()
 
         # combine them all
         _all_embs = torch.cat((h_embs.matrix.float(),
                                h_embs.unk.float().reshape(1, -1),
-                               _padding), dim=0).to(HParams.DEVICE)
+                               _padding), dim=0)
 
         # now, put the pretrained ones into them
-        self.torch_padding_id = torch.LongTensor([self.padding_id]).to(HParams.DEVICE)
+        self.torch_padding_id = torch.LongTensor([self.padding_id])
 
         # if we want to use zero padding we need this kwarg
         _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
-        self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg).to(HParams.DEVICE)
+        self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg)
         self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=fine_tune)
         self.emb_dim = _dim
 
+        # store the covectors in an nn.Embeddings?
+        if store_covecs:
+            _covecs = torch.cat((h_embs.covecs.float(),
+                                 h_embs.unk.float().reshape(1, -1),
+                                 _padding), dim=0)
+            self.covec_embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg)
+            self.embeddings.weight = nn.Parameter(_covecs, requires_grad=fine_tune)
 
-    def forward(self, token_seqs):
+
+    def forward(self, token_seqs, get_covecs=False):
+        if get_covecs:
+            return self.embeddings(token_seqs), self.covec_embeddings(token_seqs)
         return self.embeddings(token_seqs)
 
 
@@ -140,6 +150,57 @@ class FFNN(EmbeddingPooler):
     def forward(self, token_seqs, pads=None):
         pooled_embs = super(FFNN, self).forward(token_seqs, pads)
         return self.model(pooled_embs)
+
+
+
+# Sequences transformer network with attention, for classification
+class BasicAttention(EmbeddingModel):
+
+    def __init__(self, h_embs, n_classes, **kwargs):
+        super(BasicAttention, self).__init__(h_embs,
+              zero_padding=True, store_covecs=True, **kwargs)
+        self.n_classes = n_classes
+        self.W = nn.Parameter(torch.eye(self.emb_dim), requires_grad=False)
+        self.mix = nn.Parameter(torch.FloatTensor([0.5,]), requires_grad=True)
+        self.rep_to_class = nn.Linear(self.emb_dim, self.n_classes)
+
+    def forward(self, token_seqs, pads=None):
+        vec_seqs, covec_seqs = super(BasicAttention, self).forward(
+            token_seqs, get_covecs=True
+        )
+        assert (vec_seqs.shape == covec_seqs.shape)
+
+        # note: seqs -> (batch_size, max_seq_len, embedding_dim)
+        bsz, max_len, emb_dim = vec_seqs.shape
+        seq_reps = []
+
+        # slow mode for now
+        for b in range(bsz):
+            npads = pads[b] # number of pads at the end
+            sample_vecs = vec_seqs[b][:max_len - npads]
+            sample_covecs = covec_seqs[b][:max_len - npads]
+
+            # get the simple energy matrix
+            E = sample_vecs @ self.W @ sample_covecs.t()
+            assert (E.shape == (max_len-npads, max_len-npads))
+
+            # now pool the energy matrix to get the key & query energy vectors
+            # learn the mixing factor
+            ek = torch.max(E, dim=0)[0]
+            eq = torch.max(E, dim=1)[0]
+            e = self.mix * ek + (1 - self.mix) * eq
+            a = torch.softmax(e, dim=0) # maybe sigmoid?
+
+            # make the values
+            V = 0.5 * (sample_vecs + sample_covecs) # glove combination
+            seq_reps.append( a.reshape(1, -1) @ V )
+
+        X = torch.stack(seq_reps, dim=1)
+        y = self.rep_to_class(X)
+        return F.log_softmax(y, dim=1).squeeze()
+
+
+
 
 
 

@@ -10,7 +10,7 @@ from dataset_load import HilbertDataset # required import to load numpy
 from sklearn.metrics import f1_score
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
-from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier
+from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier, BasicAttention
 from evaluation.constants import *
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
@@ -65,7 +65,7 @@ class EmbWrapper(object):
     def get_id(self, w):
         return self.dictionary.get_id(w)
 
-    def get_emb(self, w):
+    def get_vec(self, w):
         try:
             idx = self.dictionary.get_id(w)
             return self.matrix[idx]
@@ -125,8 +125,8 @@ def similarity_exp(embs, hdataset, hparams, verbose=True):
             had_coverage.append(embs.has_w(w1) and embs.has_w(w2))
             gold.append(gold_score)
 
-            e1 = embs.get_emb(w1)
-            e2 = embs.get_emb(w2)
+            e1 = embs.get_vec(w1)
+            e2 = embs.get_vec(w2)
 
             similarities.append(cossim(e1, e2).item())
 
@@ -175,9 +175,9 @@ def analogy_exp(embs, hdataset, hparams):
                 missing_answer += 1
                 continue
 
-            e1 = embs.get_emb(w1).reshape(-1, 1)
-            e2 = embs.get_emb(w2).reshape(-1, 1)
-            e3 = embs.get_emb(w3).reshape(-1, 1)
+            e1 = embs.get_vec(w1).reshape(-1, 1)
+            e2 = embs.get_vec(w2).reshape(-1, 1)
+            e3 = embs.get_vec(w3).reshape(-1, 1)
 
             # get cos sims for each of them with the dataset
             sim_all = embs.matrix.mm(torch.cat([e1, e2, e3], dim=1))
@@ -304,6 +304,8 @@ def classification_exp(embs, hdataset, hparams):
         neural_constructor = LogisticRegression
     elif hparams.model_str.lower() == 'bilstm':
         neural_constructor = BiLSTMClassifier
+    elif hparams.model_str.lower() == 'att-basic':
+        neural_constructor = BasicAttention
     else:
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(hparams.model_str))
@@ -321,6 +323,9 @@ def classification_exp(embs, hdataset, hparams):
         neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
                               'n_layers': hparams.n_layers,
                               'dropout': hparams.dropout})
+
+    elif hparams.model_str.lower() == 'att-basic':
+        neural_kwargs.update({})
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())

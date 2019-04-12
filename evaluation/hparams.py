@@ -79,7 +79,7 @@ class HParams(object):
             help='flag to use a scheduled learning rate'
         )
         parser.add_argument(
-            '--model_str', type=str, choices=['ffnn', 'logreg', 'bilstm'],
+            '--model_str', type=str, choices=['ffnn', 'logreg', 'bilstm', 'att-basic'],
             help='model string for when model selection is applicable'
         )
         parser.add_argument(
