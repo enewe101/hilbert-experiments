@@ -23,11 +23,13 @@ class EmbeddingModel(nn.Module):
 
         # set up the padding embeddings
         if zero_padding:
-            _padding = torch.zeros(1, _dim)
+            _padding = torch.zeros(1, _dim).to(HParams.DEVICE)
+
         else:
             _padding = torch.from_numpy(np.random.normal(
                 -0.15, 0.15, _dim
-            )).reshape(1, -1).float()
+            )).reshape(1, -1).float().to(HParams.DEVICE)
+
 
         # combine them all
         _all_embs = torch.cat((h_embs.matrix.float(),
