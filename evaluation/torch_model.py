@@ -163,8 +163,7 @@ class BasicAttention(EmbeddingModel):
               zero_padding=True, store_covecs=True, **kwargs)
         self.n_classes = n_classes
         self.W = nn.Parameter(torch.eye(self.emb_dim), requires_grad=False)
-        self.mix = nn.Parameter(torch.FloatTensor([0.5,]), requires_grad=True)
-        self.rep_to_class = nn.Linear(self.emb_dim, self.n_classes)
+        self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
 
     def forward(self, token_seqs, pads=None):
         vec_seqs, covec_seqs = super(BasicAttention, self).forward(
@@ -187,17 +186,15 @@ class BasicAttention(EmbeddingModel):
             assert (E.shape == (max_len-npads, max_len-npads))
 
             # now pool the energy matrix to get the key & query energy vectors
-            # learn the mixing factor
-            ek = torch.max(E, dim=0)[0]
-            eq = torch.max(E, dim=1)[0]
-            e = self.mix * ek + (1 - self.mix) * eq
-            a = torch.softmax(e, dim=0) # maybe sigmoid?
+            ak = F.softmax(torch.max(E, dim=0)[0], dim=0)
+            aq = F.softmax(torch.max(E, dim=1)[0], dim=0)
 
-            # make the values
-            V = 0.5 * (sample_vecs + sample_covecs) # glove combination
-            seq_reps.append( a.reshape(1, -1) @ V )
+            # sample_vecs is L x d
+            vec_rep = ak @ sample_vecs
+            covec_rep = aq @ sample_covecs
+            seq_reps.append(torch.cat((vec_rep, covec_rep)))
 
-        X = torch.stack(seq_reps, dim=1)
+        X = torch.stack(seq_reps, dim=1).t()
         y = self.rep_to_class(X)
         return F.log_softmax(y, dim=1).squeeze()
 
