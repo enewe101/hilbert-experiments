@@ -200,6 +200,57 @@ class BasicAttention(EmbeddingModel):
 
 
 
+# Sequences transformer network with attention, for classification
+class BasicAttention(EmbeddingModel):
+
+    def __init__(self, h_embs, n_classes, learn_W=False, dropout=0, **kwargs):
+        super(BasicAttention, self).__init__(
+            h_embs, zero_padding=True, store_covecs=True, **kwargs
+        )
+        if learn_W:
+            self.W = nn.Parameter(nn.init.xavier_uniform_(
+                torch.zeros((self.emb_dim, self.emb_dim), device=HParams.DEVICE))
+            )
+        else:
+            self.W = nn.Parameter(torch.eye(self.emb_dim), requires_grad=False)
+
+        self.dropout = nn.Dropout(p=dropout)
+        self.n_classes = n_classes
+        self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
+
+
+    def forward(self, token_seqs, pads=None):
+        vec_seqs, covec_seqs = super(BasicAttention, self).forward(
+            token_seqs, get_covecs=True
+        )
+        assert (vec_seqs.shape == covec_seqs.shape)
+
+        # note: seqs -> (batch_size, max_seq_len, embedding_dim)
+        bsz, max_len, emb_dim = vec_seqs.shape
+        seq_reps = []
+
+        # slow mode for now
+        for b in range(bsz):
+            npads = pads[b] # number of pads at the end
+            sample_vecs = self.dropout(vec_seqs[b][:max_len - npads])
+            sample_covecs = self.dropout(covec_seqs[b][:max_len - npads])
+
+            # get the simple energy matrix
+            E = sample_vecs @ self.W @ sample_covecs.t()
+            assert (E.shape == (max_len-npads, max_len-npads))
+
+            # now pool the energy matrix to get the key & query energy vectors
+            ak = F.softmax(torch.max(E, dim=0)[0], dim=0)
+            aq = F.softmax(torch.max(E, dim=1)[0], dim=0)
+
+            # sample_vecs is L x d
+            vec_rep = ak @ sample_vecs
+            covec_rep = aq @ sample_covecs
+            seq_reps.append(torch.cat((vec_rep, covec_rep)))
+
+        X = torch.stack(seq_reps, dim=1).t()
+        y = self.rep_to_class(X)
+        return F.log_softmax(y, dim=1).squeeze()
 
 
 

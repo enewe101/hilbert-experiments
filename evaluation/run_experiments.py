@@ -306,6 +306,8 @@ def classification_exp(embs, hdataset, hparams):
         neural_constructor = BiLSTMClassifier
     elif hparams.model_str.lower() == 'att-basic':
         neural_constructor = BasicAttention
+    elif hparams.model_str.lower() == 'att-linear':
+        neural_constructor = BasicAttention
     else:
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(hparams.model_str))
@@ -325,7 +327,11 @@ def classification_exp(embs, hdataset, hparams):
                               'dropout': hparams.dropout})
 
     elif hparams.model_str.lower() == 'att-basic':
-        neural_kwargs.update({})
+        neural_kwargs.update({'dropout': hparams.dropout})
+
+    elif hparams.model_str.lower() == 'att-linear':
+        neural_kwargs.update({'learn_W': True,
+                              'dropout': hparams.dropout})
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
