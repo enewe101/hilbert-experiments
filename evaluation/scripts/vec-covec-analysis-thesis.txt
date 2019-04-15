@@ -1,0 +1,160 @@
+/Users/kiankd/Downloads/THESIS_FINALS/HBT-GLV-FINAL-v50k
+cat:
+using covecs
+	dot product: dog, taiex, pet, feral, stray, burglar, mouse, erebidae, schrödinger, anthropomorphic
+	cosine sim:  dog, pet, stray, mouse, rabbit, cats, anthropomorphic, scans, raccoon, feral
+not using covecs
+	dot product: dog, pet, cats, horse, dogs, rabbit, slugline, rat, kid, baby
+	cosine sim:  dog, cats, pet, dogs, horse, rat, rabbit, kid, toddler, pets
+hot:
+using covecs
+	dot product: www.netarrant.net, billboard, http://www.nyse.com, bubbling, cool, heat, humid, sauce, 816-822-1444, chili
+	cosine sim:  cool, cold, chili, bubbling, sauce, tub, heat, peppers, drink, tubs
+not using covecs
+	dot product: warm, 732-390-4697, heat, hottest, cool, heated, billboard, cold, chart, sweet
+	cosine sim:  cool, warm, heated, cold, heat, hottest, sweet, dry, heating, chart
+money:
+using covecs
+	dot product: 212-556-4204, funds, cash, borrow, laundering, funneled, amount, donate, donations, laundered
+	cosine sim:  amount, cash, funds, get, collect, borrow, amounts, donations, donating, fund
+not using covecs
+	dot product: funds, cash, text-align, fund, funding, donations, $, dollars, credit, income
+	cosine sim:  funds, cash, funding, fund, donations, credit, sums, expenses, wealth, financing
+cuba:
+using covecs
+	dot product: sicherle, cuban, fidel, articulo, castro, embargo, 282-942, havana, ftse/ase, guantanamo
+	cosine sim:  castro, cuban, havana, fidel, venezuela, dominican, rica, puerto, cubans, rico
+not using covecs
+	dot product: cuban, venezuela, fidel, cubans, havana, castro, embargo, puerto, mexico, argentina
+	cosine sim:  cuban, venezuela, castro, havana, mexico, fidel, cubans, puerto, nicaragua, rico
+
+
+
+/Users/kiankd/Downloads/THESIS_FINALS/HBT-MLE-FINAL-v50k
+cat:
+using covecs
+	dot product: burglar, siamese, scan, scans, tabasco, schrödinger, paw, feral, litter, mouse
+	cosine sim:  burglar, scan, stray, scans, feline, kitten, paw, anthropomorphic, kittens, dog
+not using covecs
+	dot product: kittens, cats, kitten, poodle, terrier, dog, raccoon, pet, puppies, puppy
+	cosine sim:  cats, dog, kitten, kittens, pet, feline, puppy, poodle, raccoon, parrot
+hot:
+using covecs
+	dot product: billboard, tub, tubs, humid, chili, peppers, coals, bubbling, summers, r&b
+	cosine sim:  tub, tubs, chili, summers, bubbling, peppers, topic, spots, humid, fudge
+not using covecs
+	dot product: hottest, bubbling, hotter, billboard, red-hot, browned, moist, preheat, oricon, warm
+	cosine sim:  hotter, bubbling, hottest, cool, warm, red-hot, cooled, scorching, cold, heated
+money:
+using covecs
+	dot product: laundering, launder, extort, laundered, funneling, hard-earned, funneled, borrow, embezzled, sums
+	cosine sim:  funneling, laundering, launder, borrow, laundered, hard-earned, borrowed, funneled, extort, raise
+not using covecs
+	dot product: funds, monies, billions, cash, sums, tax-free, coffers, donations, rubles, taxpayer
+	cosine sim:  monies, funds, cash, billions, sums, donations, fund, financing, funding, millions
+cuba:
+using covecs
+	dot product: gooding, guantanamo, havana, hispaniola, fidel, sotomayor, castro, embargo, mariel, elian
+	cosine sim:  gooding, havana, castro, hispaniola, fidel, guantanamo, prensa, santiago, exiles, sotomayor
+not using covecs
+	dot product: cubans, cuban, anti-castro, cuban-americans, havana, mariel, fidel, cuban-american, elian, nicaragua
+	cosine sim:  cuban, cubans, havana, castro, nicaragua, venezuela, honduras, cuban-americans, haiti, rica
+
+
+
+/Users/kiankd/Downloads/THESIS_FINALS/HBT-W2V-FINAL-v50k
+cat:
+using covecs
+	dot product: pet, poodle, anthropomorphic, feral, raccoon, dog, furry, kitten, stray, shaggy
+	cosine sim:  pet, poodle, dog, anthropomorphic, feral, raccoon, stray, furry, kitten, puppy
+not using covecs
+	dot product: x-note, flycatcher, poodle, retriever, terrier, hamster, rabbit, rodent, feline, kitten
+	cosine sim:  dog, cats, puppy, rabbit, feline, kitten, monkey, parrot, rat, pig
+hot:
+using covecs
+	dot product: bubbling, billboard, humid, chili, tub, tubs, peppers, coals, summers, r&b
+	cosine sim:  bubbling, tub, tubs, chili, summers, peppers, billboard, humid, spots, buns
+not using covecs
+	dot product: bubbling, billboard, hottest, köppen, hotter, chart, number-one, heatseekers, humid, airplay
+	cosine sim:  hottest, bubbling, cool, hotter, warm, billboard, red-hot, scorching, chart, steamy
+money:
+using covecs
+	dot product: laundered, laundering, launder, extort, funneling, embezzled, funneled, pocketing, siphoned, borrow
+	cosine sim:  laundering, funneling, laundered, launder, extort, funneled, sums, borrow, pocketing, embezzled
+not using covecs
+	dot product: monies, funds, http://www.nytimes.com/syndicate, cash, sums, text-align, yah, embezzled, rubles, bankroll
+	cosine sim:  monies, funds, cash, sums, fund, donations, financing, bankroll, funding, coffers
+cuba:
+using covecs
+	dot product: guantanamo, fidel, cubans, havana, cuban, hispaniola, castro, anti-castro, embargo, gooding
+	cosine sim:  havana, castro, cubans, cuban, fidel, guantanamo, gooding, hispaniola, bahamas, dominican
+not using covecs
+	dot product: sicherle, cubans, anti-castro, cuban-americans, guantanamo, cuban, hispaniola, fidel, elian, mariel
+	cosine sim:  havana, cuban, castro, cubans, nicaragua, venezuela, honduras, fidel, rico, haiti
+
+
+
+/Users/kiankd/Downloads/THESIS_FINALS/STD-GLV-FINAL-v50k
+cat:
+using covecs
+	dot product: pet, siamese, stray, feral, dog, feces, litter, alley, leopard, scans
+	cosine sim:  stray, pet, dog, siamese, feral, feces, alley, scans, grumpy, burglar
+not using covecs
+	dot product: dog, cats, dogs, pet, monkey, rabbit, rat, animal, parrot, pig
+	cosine sim:  dog, cats, dogs, animal, monkey, horse, pet, parrot, rabbit, pig
+hot:
+using covecs
+	dot product: billboard, r&b, chili, winters, chart, heat, spots, sauce, bubbling, airplay
+	cosine sim:  chili, spots, cool, winters, heat, r&b, billboard, climates, hip-hop, bubbling
+not using covecs
+	dot product: hottest, cool, humid, billboard, warm, cold, charts, heat, bubbling, wet
+	cosine sim:  cool, hottest, cold, warm, humid, dry, heat, soft, wet, hotter
+money:
+using covecs
+	dot product: taxpayer, funds, cash, donations, extort, laundering, funneling, laundered, donate, coffers
+	cosine sim:  cash, funds, taxpayer, donations, funneling, get, paying, laundering, extort, raise
+not using covecs
+	dot product: funds, cash, dollars, donations, billions, funding, $, fund, loans, financing
+	cosine sim:  funds, cash, fund, donations, dollars, billions, financing, funding, millions, pay
+cuba:
+using covecs
+	dot product: libre, fidel, cuban, embargo, castro, gooding, dominican, venezuela, rica, hispaniola
+	cosine sim:  castro, cuban, venezuela, fidel, rica, gooding, dominican, mexico, rico, hispaniola
+not using covecs
+	dot product: cuban, venezuela, castro, fidel, cubans, nicaragua, havana, mexico, panama, argentina
+	cosine sim:  cuban, venezuela, castro, mexico, havana, nicaragua, honduras, panama, rico, haiti
+
+
+
+/Users/kiankd/Downloads/THESIS_FINALS/STD-W2V-FINAL-v50k
+cat:
+using covecs
+	dot product: daffy, kitten, pet, raccoon, feline, porky, squirrel, dog, cats, mouse
+	cosine sim:  pet, dog, kitten, daffy, cats, raccoon, feline, mouse, squirrel, rabbit
+not using covecs
+	dot product: feline, kitten, terrier, kittens, cats, lemur, canis, poodle, squirrel, puppy
+	cosine sim:  dog, feline, cats, kitten, puppy, kittens, pet, rabbit, poodle, monkey
+hot:
+using covecs
+	dot product: billboard, bubbling, peaking, r&b, airplay, peaked, chart, charted, charts, debuted
+	cosine sim:  bubbling, billboard, peaking, peaked, r&b, airplay, charts, chart, debuted, charted
+not using covecs
+	dot product: billboard, heatseekers, chart, airplay, r&b, number-one, peaking, peaked, charted, oricon
+	cosine sim:  billboard, bubbling, chart, peaking, peaked, charted, hottest, charts, r&b, airplay
+money:
+using covecs
+	dot product: winnings, embezzled, launder, cheque, laundering, monies, donate, purse, donating, donated
+	cosine sim:  winnings, monies, embezzled, cheque, donate, donating, launder, laundering, donated, sum
+not using covecs
+	dot product: winnings, monies, cash, embezzled, funds, cheque, rs., rubles, annuity, kwacha
+	cosine sim:  monies, funds, cash, sums, winnings, bankroll, pay, paycheck, repay, embezzled
+cuba:
+using covecs
+	dot product: havana, guantanamo, cuban, hispaniola, nicaragua, venezuela, cubans, landfall, antilles, caribbean
+	cosine sim:  havana, cuban, guantanamo, nicaragua, venezuela, caribbean, hispaniola, dominican, panama, bahamas
+not using covecs
+	dot product: cubans, cuban, havana, anti-castro, cuban-americans, hispaniola, guantanamo, helms-burton, cuban-american, nicaragua
+	cosine sim:  havana, cuban, cubans, castro, nicaragua, venezuela, puerto, honduras, rico, fidel
+
+
+
