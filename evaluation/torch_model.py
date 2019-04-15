@@ -192,8 +192,8 @@ class BasicAttention(EmbeddingModel):
             assert (E.shape == (max_len-npads, max_len-npads))
 
             # now pool the energy matrix to get the key & query energy vectors
-            ak = torch.sigmoid(torch.max(E, dim=0)[0], dim=0)
-            aq = torch.sigmoid(torch.max(E, dim=1)[0], dim=0)
+            ak = torch.sigmoid(torch.max(E, dim=0)[0])
+            aq = torch.sigmoid(torch.max(E, dim=1)[0])
 
             # sample_vecs is L x d
             vec_rep = ak @ sample_vecs
@@ -257,8 +257,8 @@ class NeuralAttention(EmbeddingModel):
             assert (E.shape == (max_len-npads, max_len-npads))
 
             # now pool the energy matrix to get the key & query energy vectors
-            ak = torch.sigmoid(torch.max(E, dim=0)[0], dim=0)
-            aq = torch.sigmoid(torch.max(E, dim=1)[0], dim=0)
+            ak = torch.sigmoid(torch.max(E, dim=0)[0])
+            aq = torch.sigmoid(torch.max(E, dim=1)[0])
 
             # sample_vecs is L x d
             vec_rep = ak @ self.act(K @ self.Wvk)
