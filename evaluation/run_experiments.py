@@ -10,7 +10,8 @@ from dataset_load import HilbertDataset # required import to load numpy
 from sklearn.metrics import f1_score
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
-from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier, BasicAttention
+from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier, \
+    BasicAttention, NeuralAttention
 from evaluation.constants import *
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
@@ -308,6 +309,8 @@ def classification_exp(embs, hdataset, hparams):
         neural_constructor = BasicAttention
     elif hparams.model_str.lower() == 'att-linear':
         neural_constructor = BasicAttention
+    elif hparams.model_str.lower() == 'att-neural':
+        neural_constructor = NeuralAttention
     else:
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(hparams.model_str))
@@ -332,6 +335,9 @@ def classification_exp(embs, hdataset, hparams):
     elif hparams.model_str.lower() == 'att-linear':
         neural_kwargs.update({'learn_W': True,
                               'dropout': hparams.dropout})
+
+    elif hparams.model_str.lower() == 'att-neural':
+        neural_kwargs.update({'dropout': hparams.dropout})
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
