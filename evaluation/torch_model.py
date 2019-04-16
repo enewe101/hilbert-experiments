@@ -219,11 +219,11 @@ class BasicAttention(EmbeddingModel):
         # slow mode for now
         for b in range(bsz):
             npads = pads[b] # number of pads at the end
-            sample_vecs = self.dropout(vec_seqs[b][:max_len - npads])
-            sample_covecs = self.dropout(covec_seqs[b][:max_len - npads])
+            K = self.dropout(vec_seqs[b][:max_len - npads])
+            Q = self.dropout(covec_seqs[b][:max_len - npads])
 
             # get the simple energy matrix
-            E = sample_vecs @ self.W @ sample_covecs.t()
+            E = K @ self.W @ Q.t()
             assert (E.shape == (max_len-npads, max_len-npads))
 
             # now pool the energy matrix to get the key & query energy vectors
@@ -231,8 +231,8 @@ class BasicAttention(EmbeddingModel):
             aq = self.distr(torch.max(E, dim=1)[0])
 
             # sample_vecs is L x d
-            vec_rep = ak @ sample_vecs
-            covec_rep = aq @ sample_covecs
+            vec_rep = ak @ K
+            covec_rep = aq @ Q
             seq_reps.append(torch.cat((vec_rep, covec_rep)))
 
         X = torch.stack(seq_reps, dim=1).t()
@@ -262,6 +262,7 @@ class NeuralAttention(EmbeddingModel):
         self.Wvq = nn.Parameter(xavier(self.emb_dim))
 
         # other aspects
+        self.distr = get_distr_fun(distr)
         self.act = get_act_fun(act)
         self.dropout = nn.Dropout(p=dropout)
         self.n_classes = n_classes
@@ -295,17 +296,17 @@ class NeuralAttention(EmbeddingModel):
             K = self.dropout(vec_seqs[b][:max_len - npads])
             Q = self.dropout(covec_seqs[b][:max_len - npads])
 
-            # do the neural transformation to get the energy matrix
+            # do the neural transformations to get the energy matrix
             E = self.act(K @ self.Wk) @ self.act(Q @ self.Wq).t()
             assert (E.shape == (max_len-npads, max_len-npads))
 
             # now pool the energy matrix to get the key & query energy vectors
-            ak = torch.sigmoid(torch.max(E, dim=0)[0])
-            aq = torch.sigmoid(torch.max(E, dim=1)[0])
+            ak = self.distr(torch.max(E, dim=0)[0])
+            aq = self.distr(torch.max(E, dim=1)[0])
 
             # sample_vecs is L x d
             vec_rep = ak @ self.act(K @ self.Wvk)
-            covec_rep = aq @ self.act(K @ self.Wvq)
+            covec_rep = aq @ self.act(Q @ self.Wvq)
             seq_reps.append(torch.cat((vec_rep, covec_rep)))
 
         X = torch.stack(seq_reps, dim=1).t()
