@@ -109,8 +109,16 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
             # make the predictions, compute loss and record it
             predictions = model(tok_seqs, tok_pads)
             loss = loss_fun(predictions, classes)
+
+            # if loss has diverged just end the misery!!
+            if torch.isnan(loss):
+                results.update({'DIVERGED': True})
+                hresults = ResultsHolder(exp_name)
+                hresults.add_ds_results('full', results)
+                return hresults
+
             training_loss += loss.data.item()
-            
+
             # compute the back gradient
             loss.backward()
 

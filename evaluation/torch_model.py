@@ -247,6 +247,7 @@ class NeuralAttention(EmbeddingModel):
     def __init__(self, h_embs, n_classes,
                  dropout=0,
                  act='sigmoid',
+                 distr='softmax',
                  ffnn=False,
                  **kwargs):
 
