@@ -16,7 +16,8 @@ COLORS = ['xkcd:aqua', 'xkcd:blue', 'xkcd:green', 'xkcd:black',
 OVERWRITE_RESULTS = False
 SVD_GAMMA = 0.
 KIAN_PATH = (
-    '/home/enewel3/naacl2019/hilbert-experiments/evaluation/np/all_data.npz')
+    '/home/kiankd/naacl2019/hilbert-experiments/evaluation/np/all_data.npz')
+
 ########## Helper functions ###########
 #---------                  ----------#
 def get_all_iters(path):
