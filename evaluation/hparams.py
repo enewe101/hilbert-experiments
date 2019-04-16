@@ -83,6 +83,28 @@ class HParams(object):
                                               'att-basic', 'att-linear', 'att-neural'],
             help='model string for when model selection is applicable'
         )
+        # hparams for attention models
+        parser.add_argument(
+            '--distr_str', type=str, choices=['sigmoid', 'softmax'],
+            help='distribution string for attention models'
+        )
+        parser.add_argument(
+            '--act_str', type=str, choices=['sigmoid', 'relu', 'tanh'],
+            help='activation function string for model \'att-neural\''
+        )
+        parser.add_argument(
+            '--att_ffnn', action='store_true', default=False,
+            help='use a FFNN on top of an attention model, uses 300-d hidden layer'
+        )
+        parser.add_argument(
+            '--normalize', action='store_true', default=False,
+            help='normalize the vectors and covectors to unit norm? (rows)'
+        )
+        parser.add_argument(
+            '--standardize', action='store_true', default=False,
+            help='normalize the embedding components to be unit norm? (columns)'
+        )
+        # generics
         parser.add_argument(
             '--dry', action='store_true', 
             help='pass this flag to not run anything'

@@ -50,18 +50,45 @@ def run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels):
 
 # to help with dealing with averaging vectors and covectors
 class EmbWrapper(object):
-    def __init__(self, hembs, avg_vw=False):
+    def __init__(self, hembs, avg_vw=False, normalize=False, standardize=False):
         self.dictionary = hembs.dictionary
         self.matrix = hembs.V
         self.covecs = hembs.W
         self.dim = len(self.matrix[0])
         self.unk = hembs.unk
+        self.augment_embeddings(normalize, standardize)
         if avg_vw:
             if hembs.W is not None:
                 self.matrix += hembs.W
                 self.matrix /= 2.
             else:
                 print('(weak warning) no covectors found!')
+
+    def augment_embeddings(self, normalize, standardize):
+        """
+        Normalize rows and/or standardize columns (with centering).
+        We always standardize first, assuming that one would rather have
+        unit norm embeddings than very small embeddings (if doing both).
+        """
+        if standardize:
+            print('Standardizing...')
+            mmean = torch.mean(self.matrix, dim=0)
+            mnorm = self.matrix.norm(dim=0)
+
+            self.matrix -= mmean
+            self.matrix /= mnorm
+            self.covecs -= torch.mean(self.covecs, dim=0)
+            self.covecs /= self.covecs.norm(dim=0)
+
+            # get the stuff from the matrix to deal with unk
+            self.unk -= mmean
+            self.unk /= mnorm
+
+        if normalize:
+            print('Normalizing...')
+            self.matrix = (self.matrix.t() / self.matrix.norm(dim=1)).t()
+            self.covecs = (self.covecs.t() / self.covecs.norm(dim=1)).t()
+            self.unk /= self.unk.norm()
 
     def get_id(self, w):
         return self.dictionary.get_id(w)
@@ -330,14 +357,21 @@ def classification_exp(embs, hdataset, hparams):
                               'dropout': hparams.dropout})
 
     elif hparams.model_str.lower() == 'att-basic':
-        neural_kwargs.update({'dropout': hparams.dropout})
+        neural_kwargs.update({'dropout': hparams.dropout,
+                              'distr': hparams.distr_str,
+                              'ffnn': hparams.att_ffnn})
 
     elif hparams.model_str.lower() == 'att-linear':
         neural_kwargs.update({'learn_W': True,
-                              'dropout': hparams.dropout})
+                              'dropout': hparams.dropout,
+                              'distr': hparams.distr_str,
+                              'ffnn': hparams.att_ffnn})
 
     elif hparams.model_str.lower() == 'att-neural':
-        neural_kwargs.update({'dropout': hparams.dropout})
+        neural_kwargs.update({'dropout': hparams.dropout,
+                              'distr': hparams.distr_str,
+                              'act': hparams.act_str,
+                              'ffnn': hparams.att_ffnn})
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
@@ -359,12 +393,12 @@ def classification_exp(embs, hdataset, hparams):
 
 
 #### utility functions ###
-def load_embeddings(path, device=None, avg_vw=False):
+def load_embeddings(path, device=None, avg_vw=False, normalize=False, standardize=False):
     e = hilbert.embeddings.Embeddings.load(path,
             device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
         e.V = e.V.transpose(0, 1)
-    return EmbWrapper(e, avg_vw)
+    return EmbWrapper(e, avg_vw, normalize, standardize)
 
 
 def get_all_words(list_of_hdatasets):
@@ -383,7 +417,12 @@ def main():
 
     for emb_path in hparams.iter_emb_paths():
         print('Loading embeddings from {}..'.format(emb_path))
-        emb = load_embeddings(emb_path, avg_vw=hparams.avgvw)
+
+        emb = load_embeddings(emb_path,
+                              avg_vw=hparams.avgvw,
+                              normalize=hparams.normalize,
+                              standardize=hparams.standardize)
+
         if hparams.avgvw:
             print('-- averaging vectors and covectors --')
 

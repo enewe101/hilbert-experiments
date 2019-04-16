@@ -5,7 +5,7 @@ import codecs
 
 try:
     import corenlpy
-except ImportError
+except ImportError:
     corenlpy = None
 
 import shared

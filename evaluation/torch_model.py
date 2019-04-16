@@ -5,6 +5,27 @@ import torch.nn.functional as F
 from evaluation.hparams import HParams
 
 
+def xavier(d):
+    return nn.init.xavier_uniform_(torch.zeros((d, d),
+                                   device=HParams.DEVICE))
+
+def get_distr_fun(distr_str):
+    if distr_str == 'softmax':
+        return lambda tensor: torch.softmax(tensor, dim=0)
+    if distr_str == 'sigmoid':
+        return torch.sigmoid
+    raise NotImplementedError('No distribution function \"{}\"!'.format(distr_str))
+
+def get_act_fun(act_str):
+    if act_str == 'sigmoid':
+        return torch.sigmoid
+    if act_str == 'relu':
+        return torch.relu
+    if act_str == 'tanh':
+        return torch.tanh
+    raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
+
+
 # Generic model to feed forward token sequences to embeddings
 class EmbeddingModel(nn.Module):
     """
@@ -158,18 +179,32 @@ class FFNN(EmbeddingPooler):
 # Sequences transformer network with attention, for classification
 class BasicAttention(EmbeddingModel):
 
-    def __init__(self, h_embs, n_classes, learn_W=False, dropout=0, **kwargs):
+    def __init__(self, h_embs, n_classes,
+                 learn_W=False,
+                 dropout=0,
+                 distr='softmax',
+                 ffnn=False,
+                 **kwargs):
+
         super(BasicAttention, self).__init__(h_embs,
               zero_padding=True, store_covecs=True, **kwargs)
+
         self.n_classes = n_classes
+        self.W = xavier(self.emb_dim) if learn_W else torch.eye(self.emb_dim)
+        self.W = nn.Parameter(self.W, requires_grad=learn_W)
         self.dropout = nn.Dropout(p=dropout)
-        if learn_W:
-            self.W = nn.Parameter(nn.init.xavier_uniform_(
-                torch.zeros((self.emb_dim, self.emb_dim), device=HParams.DEVICE))
+        self.distr = get_distr_fun(distr)
+        if ffnn:
+            self.rep_to_class = nn.Sequential(
+                nn.Dropout(p=dropout),
+                nn.Linear(2 * self.emb_dim, self.emb_dim),
+                nn.ReLU(),
+                nn.Dropout(p=dropout),
+                nn.Linear(self.emb_dim, self.n_classes),
             )
         else:
-            self.W = nn.Parameter(torch.eye(self.emb_dim), requires_grad=False)
-        self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
+            self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
+
 
     def forward(self, token_seqs, pads=None):
         vec_seqs, covec_seqs = super(BasicAttention, self).forward(
@@ -192,8 +227,8 @@ class BasicAttention(EmbeddingModel):
             assert (E.shape == (max_len-npads, max_len-npads))
 
             # now pool the energy matrix to get the key & query energy vectors
-            ak = torch.sigmoid(torch.max(E, dim=0)[0])
-            aq = torch.sigmoid(torch.max(E, dim=1)[0])
+            ak = self.distr(torch.max(E, dim=0)[0])
+            aq = self.distr(torch.max(E, dim=1)[0])
 
             # sample_vecs is L x d
             vec_rep = ak @ sample_vecs
@@ -209,29 +244,36 @@ class BasicAttention(EmbeddingModel):
 # Sequences transformer network with attention, for classification
 class NeuralAttention(EmbeddingModel):
 
-    def __init__(self, h_embs, n_classes, dropout=0, act=torch.sigmoid, **kwargs):
+    def __init__(self, h_embs, n_classes,
+                 dropout=0,
+                 act='sigmoid',
+                 ffnn=False,
+                 **kwargs):
+
         super(NeuralAttention, self).__init__(
             h_embs, zero_padding=True, store_covecs=True, **kwargs
         )
+
         # matrices for neural transformations
-        self.Wk = nn.Parameter(nn.init.xavier_uniform_(
-            torch.zeros((self.emb_dim, self.emb_dim), device=HParams.DEVICE))
-        )
-        self.Wq = nn.Parameter(nn.init.xavier_uniform_(
-            torch.zeros((self.emb_dim, self.emb_dim), device=HParams.DEVICE))
-        )
-        self.Wvk = nn.Parameter(nn.init.xavier_uniform_(
-            torch.zeros((self.emb_dim, self.emb_dim), device=HParams.DEVICE))
-        )
-        self.Wvq = nn.Parameter(nn.init.xavier_uniform_(
-            torch.zeros((self.emb_dim, self.emb_dim), device=HParams.DEVICE))
-        )
+        self.Wk = nn.Parameter(xavier(self.emb_dim))
+        self.Wq = nn.Parameter(xavier(self.emb_dim))
+        self.Wvk = nn.Parameter(xavier(self.emb_dim))
+        self.Wvq = nn.Parameter(xavier(self.emb_dim))
 
         # other aspects
-        self.act = act
+        self.act = get_act_fun(act)
         self.dropout = nn.Dropout(p=dropout)
         self.n_classes = n_classes
-        self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
+        if ffnn:
+            self.rep_to_class = nn.Sequential(
+                nn.Dropout(p=dropout),
+                nn.Linear(2 * self.emb_dim, self.emb_dim),
+                nn.ReLU(),
+                nn.Dropout(p=dropout),
+                nn.Linear(self.emb_dim, self.n_classes),
+            )
+        else:
+            self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
 
 
     def forward(self, token_seqs, pads=None):
