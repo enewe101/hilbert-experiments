@@ -216,23 +216,28 @@ class BasicAttention(EmbeddingModel):
         bsz, max_len, emb_dim = vec_seqs.shape
         seq_reps = []
 
-        # slow mode for now
-        for b in range(bsz):
-            npads = pads[b] # number of pads at the end
-            K = self.dropout(vec_seqs[b][:max_len - npads])
-            Q = self.dropout(covec_seqs[b][:max_len - npads])
+        # here we are doing dropout, but note we will be accidentally
+        # dropping out padding components too, but that doesn't matter.
+        Ks = self.dropout(vec_seqs)
+        Qs = self.dropout(covec_seqs)
 
-            # get the simple energy matrix
-            E = K @ self.W @ Q.t()
-            assert (E.shape == (max_len-npads, max_len-npads))
+        # get energy matrices with batch-wise multiplications,
+        # after doing the W map on to K and transposing the Qs
+        # i.e., .transpose(1,2) -> B x d x L
+        Es = torch.bmm(Ks @ self.W, Qs.transpose(1, 2))
+
+        # Now, Es is of shape B x L x L, the energy matrices for every
+        # sequence in the batch. For now, we will iterate over it.
+        for b in range(bsz):
+            nwords = max_len - pads[b]
 
             # now pool the energy matrix to get the key & query energy vectors
-            ak = self.distr(torch.max(E, dim=0)[0])
-            aq = self.distr(torch.max(E, dim=1)[0])
+            ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
+            aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
 
             # sample_vecs is L x d
-            vec_rep = ak @ K
-            covec_rep = aq @ Q
+            vec_rep = ak @ Ks[b,:nwords]
+            covec_rep = aq @ Qs[b,:nwords]
             seq_reps.append(torch.cat((vec_rep, covec_rep)))
 
         X = torch.stack(seq_reps, dim=1).t()
@@ -288,25 +293,26 @@ class NeuralAttention(EmbeddingModel):
         bsz, max_len, emb_dim = vec_seqs.shape
         seq_reps = []
 
-        # slow mode for now
+        # do the big batch multiplication all at once
+        Ks = self.dropout(vec_seqs)
+        eKs = self.act(Ks @ self.Wk) # energized neural mapping
+        Qs = self.dropout(covec_seqs)
+        eQs = self.act(Qs @ self.Wq) # energized neural mapping
+
+        # now get the energy matrices
+        Es = torch.bmm(eKs, eQs.transpose(1,2))
+
+        # we have an energy tensor Es in B x L x L
         for b in range(bsz):
-            npads = pads[b] # number of pads at the end
-
-            # K and Q are L x d
-            K = self.dropout(vec_seqs[b][:max_len - npads])
-            Q = self.dropout(covec_seqs[b][:max_len - npads])
-
-            # do the neural transformations to get the energy matrix
-            E = self.act(K @ self.Wk) @ self.act(Q @ self.Wq).t()
-            assert (E.shape == (max_len-npads, max_len-npads))
+            nwords = max_len - pads[b]
 
             # now pool the energy matrix to get the key & query energy vectors
-            ak = self.distr(torch.max(E, dim=0)[0])
-            aq = self.distr(torch.max(E, dim=1)[0])
+            ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
+            aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
 
-            # sample_vecs is L x d
-            vec_rep = ak @ self.act(K @ self.Wvk)
-            covec_rep = aq @ self.act(Q @ self.Wvq)
+            # now, do the attended neural mappings and then apply attention
+            vec_rep = ak @ self.act(Ks[b,:nwords] @ self.Wvk)
+            covec_rep = aq @ self.act(Qs[b,:nwords] @ self.Wvq)
             seq_reps.append(torch.cat((vec_rep, covec_rep)))
 
         X = torch.stack(seq_reps, dim=1).t()
