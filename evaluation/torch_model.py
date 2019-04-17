@@ -47,7 +47,7 @@ def _build_padding_mask(B, L, pads):
 
 def _mask_to_tensor(mask, bsz):
     mT = torch.bmm(mask.unsqueeze(2), mask.reshape(bsz, 1, -1))
-    mT[mT == 1] = 0
+    mT -= 1 # turn the ones into zeros
     mT[mT == np.inf] = -1e4
     return mT
 
@@ -224,6 +224,7 @@ class BasicAttention(EmbeddingModel):
               zero_padding=True, store_covecs=True, **kwargs)
 
         self.n_classes = n_classes
+        self.vasawani = torch.sqrt(torch.FloatTensor([self.emb_dim])).to(HParams.DEVICE)
         self.W = xavier(self.emb_dim) if learn_W else torch.eye(self.emb_dim)
         self.W = nn.Parameter(self.W, requires_grad=learn_W)
         self.dropout = nn.Dropout(p=dropout)
@@ -258,7 +259,7 @@ class BasicAttention(EmbeddingModel):
         # get energy matrices with batch-wise multiplications,
         # after doing the W map on to K and transposing the Qs
         # i.e., .transpose(1,2) -> B x d x L
-        Es = torch.bmm(Ks @ self.W, Qs.transpose(1, 2))
+        Es = torch.bmm(Ks @ self.W, Qs.transpose(1, 2)) / self.vasawani
 
         # get the mask tensor and apply it to the energy matrix!
         Es = apply_energy_mask(Es, bsz, max_len, pads)
@@ -300,6 +301,7 @@ class NeuralAttention(EmbeddingModel):
         self.Wvq = nn.Parameter(xavier(self.emb_dim))
 
         # other aspects
+        self.vasawani = torch.sqrt(torch.FloatTensor([self.emb_dim])).to(HParams.DEVICE)
         self.distr = get_distr_fun(distr)
         self.act = get_act_fun(act)
         self.dropout = nn.Dropout(p=dropout)
@@ -332,7 +334,7 @@ class NeuralAttention(EmbeddingModel):
         eQs = self.act(Qs @ self.Wq) # energized neural mapping
 
         # now get the energy matrices
-        Es = torch.bmm(eKs, eQs.transpose(1,2))
+        Es = torch.bmm(eKs, eQs.transpose(1,2)) / self.vasawani
 
         # get the mask tensor and apply it to the energy matrix!
         Es = apply_energy_mask(Es, bsz, max_len, pads)
