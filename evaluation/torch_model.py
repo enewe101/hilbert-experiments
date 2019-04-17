@@ -208,7 +208,7 @@ class BasicAttention(EmbeddingModel):
                  **kwargs):
 
         super(BasicAttention, self).__init__(h_embs,
-              zero_padding=True, store_covecs=True, **kwargs)
+              zero_padding=False, store_covecs=True, **kwargs)
 
         self.n_classes = n_classes
         self.W = xavier(self.emb_dim) if learn_W else torch.eye(self.emb_dim)
@@ -251,7 +251,7 @@ class BasicAttention(EmbeddingModel):
         mask = build_padding_mask(bsz, max_len, pads)
         mT = mask_to_tensor(mask, bsz)
         Es *= mT
-        Es[torch.isnan(Es)] = -np.inf # unfortunate that we have to do this assignment
+        Es[Es == np.inf] *= -1 # unfortunate that we have to do this assignment
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
@@ -280,7 +280,7 @@ class NeuralAttention(EmbeddingModel):
                  **kwargs):
 
         super(NeuralAttention, self).__init__(
-            h_embs, zero_padding=True, store_covecs=True, **kwargs
+            h_embs, zero_padding=False, store_covecs=True, **kwargs
         )
 
         # matrices for neural transformations
@@ -328,7 +328,7 @@ class NeuralAttention(EmbeddingModel):
         mask = build_padding_mask(bsz, max_len, pads)
         mT = mask_to_tensor(mask, bsz)
         Es *= mT
-        Es[Es == np.inf] *= -1
+        Es[Es == np.inf] *= -1 # unfortunate that we have to do this assignment
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
