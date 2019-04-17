@@ -5,6 +5,9 @@ import torch.nn.functional as F
 from evaluation.hparams import HParams
 
 
+PAD_ENERGY = np.inf
+
+
 def xavier(d):
     return nn.init.xavier_uniform_(torch.zeros((d, d),
                                    device=HParams.DEVICE))
@@ -25,7 +28,7 @@ def get_act_fun(act_str):
         return torch.tanh
     raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
 
-def build_padding_mask(B, L, pads):
+def _build_padding_mask(B, L, pads):
     """ Returns a BxL matrix for padding! """
     ## we will now construct the padding matrix from the pads LongTensor
     P = torch.empty((L, B), device=HParams.DEVICE)  # will transpose after
@@ -39,12 +42,22 @@ def build_padding_mask(B, L, pads):
     # now use np.where to figure out where to put infinities for padding
     mask = torch.where(Z < P,
                        torch.FloatTensor([1]).to(HParams.DEVICE),
-                       torch.FloatTensor([np.inf]).to(HParams.DEVICE))
+                       torch.FloatTensor([PAD_ENERGY]).to(HParams.DEVICE))
     return mask
 
-def mask_to_tensor(mask, bsz):
+def _mask_to_tensor(mask, bsz):
     mT = torch.bmm(mask.unsqueeze(2), mask.reshape(bsz, 1, -1))
+    mT[mT == 1] = 0
+    mT[mT == np.inf] = -1e4
     return mT
+
+def apply_energy_mask(Es, bsz, max_len, pads):
+    mask = _build_padding_mask(bsz, max_len, pads)
+    mT = _mask_to_tensor(mask, bsz)
+    mEs = Es + mT
+    return mEs
+
+
 
 
 # Generic model to feed forward token sequences to embeddings
@@ -208,7 +221,7 @@ class BasicAttention(EmbeddingModel):
                  **kwargs):
 
         super(BasicAttention, self).__init__(h_embs,
-              zero_padding=False, store_covecs=True, **kwargs)
+              zero_padding=True, store_covecs=True, **kwargs)
 
         self.n_classes = n_classes
         self.W = xavier(self.emb_dim) if learn_W else torch.eye(self.emb_dim)
@@ -248,10 +261,7 @@ class BasicAttention(EmbeddingModel):
         Es = torch.bmm(Ks @ self.W, Qs.transpose(1, 2))
 
         # get the mask tensor and apply it to the energy matrix!
-        mask = build_padding_mask(bsz, max_len, pads)
-        mT = mask_to_tensor(mask, bsz)
-        Es *= mT
-        Es[Es == np.inf] *= -1 # unfortunate that we have to do this assignment
+        Es = apply_energy_mask(Es, bsz, max_len, pads)
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
@@ -280,7 +290,7 @@ class NeuralAttention(EmbeddingModel):
                  **kwargs):
 
         super(NeuralAttention, self).__init__(
-            h_embs, zero_padding=False, store_covecs=True, **kwargs
+            h_embs, zero_padding=True, store_covecs=True, **kwargs
         )
 
         # matrices for neural transformations
@@ -325,10 +335,7 @@ class NeuralAttention(EmbeddingModel):
         Es = torch.bmm(eKs, eQs.transpose(1,2))
 
         # get the mask tensor and apply it to the energy matrix!
-        mask = build_padding_mask(bsz, max_len, pads)
-        mT = mask_to_tensor(mask, bsz)
-        Es *= mT
-        Es[Es == np.inf] *= -1 # unfortunate that we have to do this assignment
+        Es = apply_energy_mask(Es, bsz, max_len, pads)
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
