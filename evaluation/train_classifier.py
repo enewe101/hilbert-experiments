@@ -112,6 +112,7 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
 
             # if loss has diverged just end the misery!!
             if torch.isnan(loss):
+                print('I DIVERGED!!! ENDING.')
                 results.update({'DIVERGED': True})
                 hresults = ResultsHolder(exp_name)
                 hresults.add_ds_results('full', results)
