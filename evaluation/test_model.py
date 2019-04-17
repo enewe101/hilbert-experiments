@@ -1,7 +1,7 @@
 import torch
-
+import numpy as np
 from evaluation.run_experiments import load_embeddings
-from evaluation.torch_model import BasicAttention, NeuralAttention
+from evaluation.torch_model import BasicAttention, NeuralAttention, build_padding_mask, mask_to_tensor
 
 
 
@@ -20,7 +20,31 @@ if __name__ == '__main__':
     pads = torch.LongTensor([0, 1, 1, 2, 2, 2])
     Y = torch.LongTensor([0, 0, 0, 1, 1, 1])  # 6 labels
 
-    h_embs = load_embeddings('/home/ml/kkenyo1/git/hilbert-experiments/evaluation/HBT-MLE-FINAL-v50k', device='cpu',
+    B, L = len(X), len(X[0])
+
+    # padding testing
+    mask = build_padding_mask(B, L, pads)
+    assert (mask.shape == (B, L))
+
+    for m, x in zip(mask, X):
+        for mij, xij in zip(m, x):
+            assert (mij == np.inf and xij == 0) or (mij != np.inf and xij !=0)
+
+    mT = mask_to_tensor(mask, B)
+    assert (mT.shape == (B, L, L))
+    for s, energy_mask in enumerate(mT):
+        assert (energy_mask.shape == (L, L))
+        if pads[s] > 0:
+            for j in range(L):
+                for i in range(L):
+                    if i > L - pads[s] or j > L - pads[s]:
+                        assert (energy_mask[i,j] == np.inf)
+        else:
+            assert (torch.all(energy_mask == torch.ones((L, L))))
+
+
+
+    h_embs = load_embeddings('HBT-MLE-FINAL-v50k', device='cpu',
                              normalize=True, standardize=True)
 
     for b in [True, False]:

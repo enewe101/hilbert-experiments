@@ -11,7 +11,7 @@ def xavier(d):
 
 def get_distr_fun(distr_str):
     if distr_str == 'softmax':
-        return lambda tensor: torch.softmax(tensor, dim=0)
+        return lambda tensor: torch.softmax(tensor, dim=1)
     if distr_str == 'sigmoid':
         return torch.sigmoid
     raise NotImplementedError('No distribution function \"{}\"!'.format(distr_str))
@@ -24,6 +24,27 @@ def get_act_fun(act_str):
     if act_str == 'tanh':
         return torch.tanh
     raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
+
+def build_padding_mask(B, L, pads):
+    """ Returns a BxL matrix for padding! """
+    ## we will now construct the padding matrix from the pads LongTensor
+    P = torch.empty((L, B), device=HParams.DEVICE)  # will transpose after
+    P[:] = L - pads  # now it is a matrix with number of words as each value
+    P = P.t().float()  # transpose back to be proper
+
+    # now we are building up a matrix of indices to properly build the padding matrix
+    Z = torch.empty((B, L), device=HParams.DEVICE)
+    Z[:] = torch.arange(L).float()
+
+    # now use np.where to figure out where to put infinities for padding
+    mask = torch.where(Z < P,
+                       torch.FloatTensor([1], device=HParams.DEVICE),
+                       torch.FloatTensor([np.inf], device=HParams.DEVICE))
+    return mask
+
+def mask_to_tensor(mask, bsz):
+    mT = torch.bmm(mask.unsqueeze(2), mask.reshape(bsz, 1, -1))
+    return mT
 
 
 # Generic model to feed forward token sequences to embeddings
@@ -211,36 +232,53 @@ class BasicAttention(EmbeddingModel):
             token_seqs, get_covecs=True
         )
         assert (vec_seqs.shape == covec_seqs.shape)
+        assert (pads is not None)
 
         # note: seqs -> (batch_size, max_seq_len, embedding_dim)
         bsz, max_len, emb_dim = vec_seqs.shape
-        seq_reps = []
+        # seq_reps = []
 
-        # here we are doing dropout, but note we will be accidentally
+        # here we are doing dropout, but note we will be incidentally
         # dropping out padding components too, but that doesn't matter.
-        Ks = self.dropout(vec_seqs)
-        Qs = self.dropout(covec_seqs)
+        Ks = self.dropout(vec_seqs) # B x L x d
+        Qs = self.dropout(covec_seqs) # B x L x d
 
         # get energy matrices with batch-wise multiplications,
         # after doing the W map on to K and transposing the Qs
         # i.e., .transpose(1,2) -> B x d x L
         Es = torch.bmm(Ks @ self.W, Qs.transpose(1, 2))
 
+        # get the mask tensor and apply it to the energy matrix!
+        mask = build_padding_mask(bsz, max_len, pads)
+        mT = mask_to_tensor(mask, bsz)
+        Es *= mT
+        Es[Es == np.inf] *= -1
+
+        # now get attention matrices from across the batch
+        Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
+        Aq = self.distr(torch.max(Es, dim=2)[0]).reshape(bsz, 1, max_len)
+
+        # note that Ak and Aq are both B x L
+        # or, each holds B attention vectors (of length L)
+        vK = (Ak @ Ks).squeeze() # B x 1 x L times a B x L x d
+        vQ = (Aq @ Qs).squeeze()
+
         # Now, Es is of shape B x L x L, the energy matrices for every
         # sequence in the batch. For now, we will iterate over it.
-        for b in range(bsz):
-            nwords = max_len - pads[b]
+        # for b in range(bsz):
+        #     nwords = max_len - pads[b]
+        #
+        #     # now pool the energy matrix to get the key & query energy vectors
+        #     ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
+        #     aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
+        #
+        #     # sample_vecs is L x d
+        #     vec_rep = ak @ Ks[b,:nwords]
+        #     covec_rep = aq @ Qs[b,:nwords]
+        #     seq_reps.append(torch.cat((vec_rep, covec_rep)))
 
-            # now pool the energy matrix to get the key & query energy vectors
-            ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
-            aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
-
-            # sample_vecs is L x d
-            vec_rep = ak @ Ks[b,:nwords]
-            covec_rep = aq @ Qs[b,:nwords]
-            seq_reps.append(torch.cat((vec_rep, covec_rep)))
-
-        X = torch.stack(seq_reps, dim=1).t()
+        # X = torch.stack(seq_reps, dim=1).t()
+        X = torch.cat((vK, vQ), dim=1)
         y = self.rep_to_class(X)
         return F.log_softmax(y, dim=1).squeeze()
 
@@ -302,20 +340,36 @@ class NeuralAttention(EmbeddingModel):
         # now get the energy matrices
         Es = torch.bmm(eKs, eQs.transpose(1,2))
 
-        # we have an energy tensor Es in B x L x L
-        for b in range(bsz):
-            nwords = max_len - pads[b]
+        # get the mask tensor and apply it to the energy matrix!
+        mask = build_padding_mask(bsz, max_len, pads)
+        mT = mask_to_tensor(mask, bsz)
+        Es *= mT
+        Es[Es == np.inf] *= -1
 
-            # now pool the energy matrix to get the key & query energy vectors
-            ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
-            aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
+        # now get attention matrices from across the batch
+        Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
+        Aq = self.distr(torch.max(Es, dim=2)[0]).reshape(bsz, 1, max_len)
 
-            # now, do the attended neural mappings and then apply attention
-            vec_rep = ak @ self.act(Ks[b,:nwords] @ self.Wvk)
-            covec_rep = aq @ self.act(Qs[b,:nwords] @ self.Wvq)
-            seq_reps.append(torch.cat((vec_rep, covec_rep)))
+        # note that Ak and Aq are both B x L. Another interpretation:
+        #  each holds B attention vectors (of length L)
+        # We will now multiply attention on the attended neural mappings of K & Q
+        vK = (Ak @ self.act(Ks @ self.Wvk)).squeeze() # B x 1 x L times a B x L x d
+        vQ = (Aq @ self.act(Qs @ self.Wvq)).squeeze()
 
-        X = torch.stack(seq_reps, dim=1).t()
+        # # we have an energy tensor Es in B x L x L
+        # for b in range(bsz):
+        #     nwords = max_len - pads[b]
+        #
+        #     # now pool the energy matrix to get the key & query energy vectors
+        #     ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
+        #     aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
+        #
+        #     # now, do the attended neural mappings and then apply attention
+        #     vec_rep = ak @ self.act(Ks[b,:nwords] @ self.Wvk)
+        #     covec_rep = aq @ self.act(Qs[b,:nwords] @ self.Wvq)
+        #     seq_reps.append(torch.cat((vec_rep, covec_rep)))
+
+        X = torch.cat((vK, vQ), dim=1)
         y = self.rep_to_class(X)
         return F.log_softmax(y, dim=1).squeeze()
 
