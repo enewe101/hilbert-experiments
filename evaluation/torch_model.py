@@ -38,8 +38,8 @@ def build_padding_mask(B, L, pads):
 
     # now use np.where to figure out where to put infinities for padding
     mask = torch.where(Z < P,
-                       torch.FloatTensor([1], device=HParams.DEVICE),
-                       torch.FloatTensor([np.inf], device=HParams.DEVICE))
+                       torch.FloatTensor([1]).to(HParams.DEVICE),
+                       torch.FloatTensor([np.inf]).to(HParams.DEVICE))
     return mask
 
 def mask_to_tensor(mask, bsz):
