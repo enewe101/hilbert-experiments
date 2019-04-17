@@ -251,7 +251,7 @@ class BasicAttention(EmbeddingModel):
         mask = build_padding_mask(bsz, max_len, pads)
         mT = mask_to_tensor(mask, bsz)
         Es *= mT
-        Es[Es == np.inf] *= -1 # unfortunate that we have to do this assignment
+        Es[torch.isnan(Es)] = -np.inf # unfortunate that we have to do this assignment
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
