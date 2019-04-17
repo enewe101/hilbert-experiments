@@ -236,7 +236,6 @@ class BasicAttention(EmbeddingModel):
 
         # note: seqs -> (batch_size, max_seq_len, embedding_dim)
         bsz, max_len, emb_dim = vec_seqs.shape
-        # seq_reps = []
 
         # here we are doing dropout, but note we will be incidentally
         # dropping out padding components too, but that doesn't matter.
@@ -252,7 +251,7 @@ class BasicAttention(EmbeddingModel):
         mask = build_padding_mask(bsz, max_len, pads)
         mT = mask_to_tensor(mask, bsz)
         Es *= mT
-        Es[Es == np.inf] *= -1
+        Es[Es == np.inf] *= -1 # unfortunate that we have to do this assignment
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
@@ -263,21 +262,7 @@ class BasicAttention(EmbeddingModel):
         vK = (Ak @ Ks).squeeze() # B x 1 x L times a B x L x d
         vQ = (Aq @ Qs).squeeze()
 
-        # Now, Es is of shape B x L x L, the energy matrices for every
-        # sequence in the batch. For now, we will iterate over it.
-        # for b in range(bsz):
-        #     nwords = max_len - pads[b]
-        #
-        #     # now pool the energy matrix to get the key & query energy vectors
-        #     ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
-        #     aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
-        #
-        #     # sample_vecs is L x d
-        #     vec_rep = ak @ Ks[b,:nwords]
-        #     covec_rep = aq @ Qs[b,:nwords]
-        #     seq_reps.append(torch.cat((vec_rep, covec_rep)))
-
-        # X = torch.stack(seq_reps, dim=1).t()
+        # basically done, just conccat and then predict!
         X = torch.cat((vK, vQ), dim=1)
         y = self.rep_to_class(X)
         return F.log_softmax(y, dim=1).squeeze()
@@ -329,7 +314,6 @@ class NeuralAttention(EmbeddingModel):
 
         # note: seqs -> (batch_size, max_seq_len, embedding_dim)
         bsz, max_len, emb_dim = vec_seqs.shape
-        seq_reps = []
 
         # do the big batch multiplication all at once
         Ks = self.dropout(vec_seqs)
@@ -353,22 +337,12 @@ class NeuralAttention(EmbeddingModel):
         # note that Ak and Aq are both B x L. Another interpretation:
         #  each holds B attention vectors (of length L)
         # We will now multiply attention on the attended neural mappings of K & Q
+        # i.e., we are defining the Values with different neural transformations
+        # and are now attending upon them
         vK = (Ak @ self.act(Ks @ self.Wvk)).squeeze() # B x 1 x L times a B x L x d
         vQ = (Aq @ self.act(Qs @ self.Wvq)).squeeze()
 
-        # # we have an energy tensor Es in B x L x L
-        # for b in range(bsz):
-        #     nwords = max_len - pads[b]
-        #
-        #     # now pool the energy matrix to get the key & query energy vectors
-        #     ak = self.distr(torch.max(Es[b,:nwords,:nwords], dim=0)[0])
-        #     aq = self.distr(torch.max(Es[b,:nwords,:nwords], dim=1)[0])
-        #
-        #     # now, do the attended neural mappings and then apply attention
-        #     vec_rep = ak @ self.act(Ks[b,:nwords] @ self.Wvk)
-        #     covec_rep = aq @ self.act(Qs[b,:nwords] @ self.Wvq)
-        #     seq_reps.append(torch.cat((vec_rep, covec_rep)))
-
+        # basically done, just conccat and then predict!
         X = torch.cat((vK, vQ), dim=1)
         y = self.rep_to_class(X)
         return F.log_softmax(y, dim=1).squeeze()
