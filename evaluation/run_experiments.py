@@ -12,7 +12,7 @@ from evaluation.dataset_load import HilbertDataset # required import to load num
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
 from evaluation.torch_model import SeqLabLSTM
-from evaluation.model_factory import get_classifier_constr_kwargs
+from evaluation.factories import get_classifier_constr_kwargs
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
 from evaluation.constants import *
@@ -260,6 +260,7 @@ def analogy_exp(embs, hdataset, hparams):
 
 # TODO: add CRF on top of the LSTM predictions.
 # TODO: improve documentation.
+# TODO: update sequence labelling to correspond to new HParams and factory patterns.
 
 def seq_labelling_exp(embs, hdataset, hparams):
     """
@@ -333,11 +334,11 @@ def classification_exp(embs, hdataset, hparams):
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
-    results = train_classifier(exp_name,
-                               embs,
-                               constr,
-                               kwargs,
-                               lr=hparams.lr,
+    results = train_classifier(exp_name=exp_name,
+                               h_embs=embs,
+                               classifier_constr=constr,
+                               kw_params=kwargs,
+                               opt_str=hparams.opt_str,
                                n_epochs=hparams.epochs,
                                mb_size=hparams.mb_size,
                                early_stop=10,
@@ -345,8 +346,7 @@ def classification_exp(embs, hdataset, hparams):
                                tr_y=tr_y,
                                te_x=te_x,
                                te_y=te_y,
-                               schedule_lr=hparams.schedule_lr,
-                               verbose=True,)
+                               verbose=True)
     return results
 
 

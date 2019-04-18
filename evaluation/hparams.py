@@ -50,12 +50,13 @@ class HParams(object):
             help='pass to fine tune embeddings from gradient'
         )
         parser.add_argument(
-            '--lr', type=float, default=0.001,
-            help='learning rate for a torch model'
-        )
-        parser.add_argument(
-            '--schedule_lr', action='store_true', default=False,
-            help='flag to use a scheduled learning rate'
+            '--opt_str', type=str, default='adam', choices=['adam', 'sgd'],
+            help=(
+                "string to pass for the optimizer option, every model will use "
+                "learning rate scheduling appropiately. The two options are: "
+                "adam, which starts at 0.001 and decreases by x10 (our ICML paper) "
+                "vs sgd, which starts at 0.1 and decreases by x5 (conneau et al)"
+            )
         )
         parser.add_argument(
             '--mb_size', type=int, default=64, help='size of the minibatches'
@@ -67,7 +68,7 @@ class HParams(object):
 
         ### Classification parameters
         parser.add_argument(
-            '--model_str', type=str, choices=['ffnn', 'logreg', 'bilstm', 'bilstm-max' 
+            '--model_str', type=str, choices=['ffnn', 'logreg', 'bilstm', 'bilstm-max',
                                               'att-basic', 'att-linear', 'att-diag',
                                               'att-neural'],
             help='model string for when model selection is applicable; e.g., classification'

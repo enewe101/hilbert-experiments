@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
-import numpy as np
-from torch.optim import lr_scheduler
 from collections import defaultdict
 from sklearn.model_selection import train_test_split
 from evaluation.hparams import HParams
 from evaluation.results import ResultsHolder
 from evaluation.seq_batch_loader import SequenceLoader
+from evaluation.factories import get_optimizer_scheduler
 
 
 MAX_MB_SIZE = 512
@@ -27,16 +26,15 @@ def feed_full_ds(neural_model, ds_loader):
 
 
 def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
-                     lr, n_epochs, mb_size, early_stop,
+                     opt_str, n_epochs, mb_size, early_stop,
                      tr_x, tr_y, te_x, te_y,
-                     schedule_lr=False, verbose=True):
+                     verbose=True):
     """
     Main function to train any classifier object.
     :param exp_name: name of the experiment (e.g., POS-wsj)
     :param h_embs: HilbertEmbeddings object
     :param classifier_constr: constructor that extends EmbeddingModel
     :param kw_params: dictionary of kwargs
-    :param lr: learning rate
     :param n_epochs: max number of epochs to train for
     :param mb_size: size of minibatches, -1 for full batch training
     :param early_stop: number of epochs to stop after no improvement is seen
@@ -73,15 +71,8 @@ def train_classifier(exp_name, h_embs, classifier_constr, kw_params,
     te_loader = SequenceLoader(te_x, te_y, MAX_MB_SIZE, model.padding_id)
 
     # get the big daddy bois
-    optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
     loss_fun = nn.CrossEntropyLoss()
-
-    # learning rate scheduler to maximize the validation set accuracy.
-    # default with a dummy scheduler where no change occurs
-    scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, factor=0.1, patience=early_stop // 5, mode='max',
-        min_lr=0 if schedule_lr else lr, verbose=True,
-    )
+    optimizer, scheduler = get_optimizer_scheduler(model, opt_str, early_stop)
 
     # results storage
     results = defaultdict(lambda: [])

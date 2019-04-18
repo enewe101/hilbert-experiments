@@ -1,4 +1,27 @@
+import torch
 import evaluation.torch_model as tm
+
+
+def get_optimizer_scheduler(nn_module, opt_str, early_stop):
+    # learning rate scheduler to maximize the validation set accuracy.
+    # default with a dummy scheduler where no change occurs
+
+    nn_params = [p for p in nn_module.parameters() if p.requires_grad]
+
+    if opt_str == 'adam':
+        optimizer = torch.optim.Adam(nn_params, lr=0.001)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, factor=0.1, patience=early_stop // 5, mode='max',
+            min_lr=1e-7, verbose=True)
+    elif opt_str == 'sgd':
+        optimizer = torch.optim.SGD(nn_params, lr=0.1, weight_decay=0.99)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, factor=0.2, patience=early_stop // 5, mode='max',
+            min_lr=1e-6, verbose=True)
+    else:
+        raise NotImplementedError('Optimizer scheduler \"{}\" not '
+                                  'implemented!'.format(opt_str))
+    return optimizer, scheduler
 
 
 def get_classifier_constr_kwargs(hparams, nclasses):
