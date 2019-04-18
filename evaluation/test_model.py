@@ -61,8 +61,10 @@ if __name__ == '__main__':
 
         for c in [BasicAttention, NeuralAttention]:
             for ffnn in [True, False]:
-                kwargs = {'learn_W': b} if c==BasicAttention else {}
-                model = c(h_embs, 2, dropout=0.5, ffnn=ffnn, **kwargs)
-                preds = model(X, pads=pads)
+                for usecovecs in [True, False]:
+                    kwargs = {'learn_W': b} if c==BasicAttention else {}
+                    model = c(h_embs, 2, dropout=0.5, ffnn=ffnn, usecovecs=usecovecs,
+                              **kwargs)
+                    preds = model(X, pads=pads)
 
 

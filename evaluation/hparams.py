@@ -110,6 +110,10 @@ class HParams(object):
             '--act_str', type=str, choices=['sigmoid', 'relu', 'tanh'], default='tanh',
             help='activation function string for model \'att-neural\''
         )
+        parser.add_argument(
+            '--nocovecs', action='store_true', default=False,
+            help='dont use the real covectors in the attention mechanism'
+        )
 
         # Parameters for augmenting input embeddings
         parser.add_argument(

@@ -11,11 +11,11 @@ from sklearn.metrics import f1_score
 from evaluation.dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
-from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier, \
-    BasicAttention, NeuralAttention
-from evaluation.constants import *
+from evaluation.torch_model import SeqLabLSTM
+from evaluation.model_factory import get_classifier_constr_kwargs
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
+from evaluation.constants import *
 
 
 def flatten(double_l):
@@ -284,9 +284,9 @@ def seq_labelling_exp(embs, hdataset, hparams):
         assert hdataset.ignore_idx > 0
         sst_labels = sorted(list(sst_labels))
  
-    # run the baseline algorithm
-    baseline_results = run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels)
-    exit(0)
+    # run the baseline algorithm, comment/uncomment design pattern right now lol
+    # baseline_results = run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels)
+    # exit(0)
    
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token
@@ -328,64 +328,15 @@ def classification_exp(embs, hdataset, hparams):
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=False)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=False)
 
-    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx),
-                     'fine_tune': hparams.fine_tune,
-                     'ffnn': hparams.ffnn}
-
-    # get the model string and now set the appropriate hyperparameters
-    mstr = hparams.model_str.lower()
-
-    if mstr == 'logreg':
-        neural_constructor = LogisticRegression
-    elif mstr == 'ffnn':
-        neural_constructor = FFNN
-        neural_kwargs.update({'hdim1': hparams.hdim1,
-                              'hdim2': hparams.hdim2,
-                              'dropout': hparams.dropout})
-    elif mstr == 'bilstm':
-        neural_constructor = BiLSTMClassifier
-        neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
-                              'n_layers': hparams.n_layers,
-                              'dropout': hparams.dropout,
-                              'max_pool': False})
-    elif mstr == 'bilstm-max':
-        neural_constructor = BiLSTMClassifier
-        neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
-                              'n_layers': hparams.n_layers,
-                              'dropout': hparams.dropout,
-                              'max_pool': True})
-    elif mstr == 'att-basic':
-        neural_constructor = BasicAttention
-        neural_kwargs.update({'learn_W': False,
-                              'dropout': hparams.dropout,
-                              'distr': hparams.distr_str})
-    elif mstr == 'att-diag':
-        neural_constructor = BasicAttention
-        neural_kwargs.update({'learn_W': True,
-                              'diagonal_W': True,
-                              'dropout': hparams.dropout,
-                              'distr': hparams.distr_str})
-    elif mstr == 'att-linear':
-        neural_constructor = BasicAttention
-        neural_kwargs.update({'learn_W': True,
-                              'diagonal_W': False,
-                              'dropout': hparams.dropout,
-                              'distr': hparams.distr_str})
-    elif mstr == 'att-neural':
-        neural_constructor = NeuralAttention
-        neural_kwargs.update({'dropout': hparams.dropout,
-                              'distr': hparams.distr_str,
-                              'act': hparams.act_str})
-    else:
-        raise NotImplementedError('Constructor model \"{}\" not '
-                                  'implemented!'.format(mstr))
+    # get the constructor and kwargs corresponding to the hparams from the factory
+    constr, kwargs = get_classifier_constr_kwargs(hparams, len(hdataset.labels_to_idx))
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
     results = train_classifier(exp_name,
                                embs,
-                               neural_constructor,
-                               neural_kwargs,
+                               constr,
+                               kwargs,
                                lr=hparams.lr,
                                n_epochs=hparams.epochs,
                                mb_size=hparams.mb_size,

@@ -18,6 +18,7 @@ class LogisticRegression(tmb.EmbeddingPooler):
         return self.classifier(pooled_embs)
 
 
+
 # Basic FNN for classification on pooled word embeddings. The interpretation is that
 # the sentence representation is the pooled word embeddings after being activated
 # by the first hidden layer of the FFNN, which is then passed through a 1-layer
@@ -44,7 +45,8 @@ class FFNN(tmb.EmbeddingPooler):
 class BasicAttention(tmb.EmbeddingModel):
 
     def __init__(self, h_embs, n_classes, learn_W=False, diagonal_W=False,
-                 dropout=0, distr='softmax', ffnn=True, **kwargs):
+                 dropout=0, distr='softmax', ffnn=True, usecovecs=True,
+                 **kwargs):
 
         super(BasicAttention, self).__init__(h_embs,
               zero_padding=True, store_covecs=True, **kwargs)
@@ -59,6 +61,7 @@ class BasicAttention(tmb.EmbeddingModel):
         else:
             self.W = torch.ones(self.emb_dim).to(HParams.DEVICE)
 
+        self.usecovecs = usecovecs # for testing without them
         self.n_classes = n_classes
         self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
         self.dropout = nn.Dropout(p=dropout)
@@ -80,7 +83,8 @@ class BasicAttention(tmb.EmbeddingModel):
         # here we are doing dropout, but note we will be incidentally
         # dropping out padding components too, but that doesn't matter.
         Ks = self.dropout(vec_seqs) # B x L x d
-        Qs = self.dropout(covec_seqs) # B x L x d
+        Qs = self.dropout(covec_seqs) if self.usecovecs else \
+             self.dropout(vec_seqs) # B x L x d
 
         # get energy matrices with batch-wise multiplications,
         # after doing the W map on to K and then transposing the Qs
@@ -99,7 +103,7 @@ class BasicAttention(tmb.EmbeddingModel):
 
         # note that Ak and Aq are both B x L
         # or, each holds B attention vectors (of length L)
-        vK = (Ak @ Ks).squeeze() # B x 1 x L times a B x L x d
+        vK = (Ak @ mapped_Ks).squeeze() # B x 1 x L times a B x L x d
         vQ = (Aq @ Qs).squeeze()
 
         # basically done, just conccat and then predict!
@@ -117,11 +121,13 @@ class NeuralAttention(tmb.EmbeddingModel):
                  act='sigmoid',
                  distr='softmax',
                  ffnn=True,
+                 usecovecs=True,
                  **kwargs):
 
         super(NeuralAttention, self).__init__(
             h_embs, zero_padding=True, store_covecs=True, **kwargs
         )
+        self.usecovecs = usecovecs
 
         # matrices for neural transformations
         self.Wk = nn.Parameter(tmb.rmatrix(self.emb_dim))
@@ -152,7 +158,8 @@ class NeuralAttention(tmb.EmbeddingModel):
         # do the big batch multiplication all at once
         Ks = self.dropout(vec_seqs)
         eKs = self.act(Ks @ self.Wk) # energized neural mapping
-        Qs = self.dropout(covec_seqs)
+        Qs = self.dropout(covec_seqs) if self.usecovecs else \
+             self.dropout(vec_seqs)
         eQs = self.act(Qs @ self.Wq) # energized neural mapping
 
         # now get the energy matrices
