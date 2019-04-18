@@ -50,6 +50,25 @@ def apply_energy_mask(Es, bsz, max_len, pads):
     return mEs
 
 
+# producers
+def get_distr_fun(distr_str):
+    if distr_str == 'softmax':
+        return lambda tensor: torch.softmax(tensor, dim=1)
+    if distr_str == 'sigmoid':
+        return torch.sigmoid
+    raise NotImplementedError('No distribution function \"{}\"!'.format(distr_str))
+
+
+def get_act_fun(act_str):
+    if act_str == 'sigmoid':
+        return torch.sigmoid
+    if act_str == 'relu':
+        return torch.relu
+    if act_str == 'tanh':
+        return torch.tanh
+    raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
+
+
 
 # MLP classifier, as used by Conneau et al. 2017 EMNLP
 class MLPClassifier(nn.Module):

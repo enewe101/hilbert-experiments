@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import evaluation.torch_model_base as tmb
-import evaluation.factories as factories
 from evaluation.hparams import HParams
 
 
@@ -67,7 +66,7 @@ class BasicAttention(tmb.EmbeddingModel):
         self.n_classes = n_classes
         self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
         self.dropout = nn.Dropout(p=dropout)
-        self.distr = factories.get_distr_fun(distr)
+        self.distr = tmb.get_distr_fun(distr)
         self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
                                             dropout=dropout, linear=ffnn)
 
@@ -140,8 +139,8 @@ class NeuralAttention(tmb.EmbeddingModel):
         # other aspects
         self.n_classes = n_classes
         self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
-        self.distr = factories.get_distr_fun(distr)
-        self.act = factories.get_act_fun(act)
+        self.distr = tmb.get_distr_fun(distr)
+        self.act = tmb.get_act_fun(act)
         self.dropout = nn.Dropout(p=dropout)
         self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
                                             dropout=dropout, linear=ffnn)
