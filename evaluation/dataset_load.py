@@ -8,8 +8,8 @@ from nltk.corpus import brown, conll2000, ptb
 from os import listdir
 from evaluation.constants import *
 
-UNSUP_DIR = 'unsup_datasets/'
-SUP_DIR = 'sup_datasets/'
+UNSUP_DIR = 'additional/unsup_datasets/'
+SUP_DIR = 'additional/sup_datasets/'
 
 # filter helper function
 def filter_words(tok_list, filter_stops):
@@ -381,7 +381,7 @@ if __name__ == '__main__':
     if not args.vocab and not args.testing:
         # save it all up
         all_data = load_all()
-        np.savez_compressed('np/all_data.npz', np.array([all_data]))
+        np.savez_compressed('additional/np/all_data.npz', np.array([all_data]))
 
     if args.vocab:
         vocab = set()

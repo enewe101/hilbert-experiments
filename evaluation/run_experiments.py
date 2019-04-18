@@ -7,8 +7,8 @@ import time
 from collections import defaultdict
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
-from dataset_load import HilbertDataset # required import to load numpy
 from sklearn.metrics import f1_score
+from evaluation.dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
 from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier, \
@@ -17,8 +17,10 @@ from evaluation.constants import *
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
 
+
 def flatten(double_l):
     return [item for l in double_l for item in l]
+
 
 ## helper for seq labelling
 def run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels):
@@ -326,53 +328,57 @@ def classification_exp(embs, hdataset, hparams):
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=False)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=False)
 
-    # set the neural constructor
-    if hparams.model_str.lower() == 'ffnn':
-        neural_constructor = FFNN
-    elif hparams.model_str.lower() == 'logreg':
-        neural_constructor = LogisticRegression
-    elif hparams.model_str.lower() == 'bilstm':
-        neural_constructor = BiLSTMClassifier
-    elif hparams.model_str.lower() == 'att-basic':
-        neural_constructor = BasicAttention
-    elif hparams.model_str.lower() == 'att-linear':
-        neural_constructor = BasicAttention
-    elif hparams.model_str.lower() == 'att-neural':
-        neural_constructor = NeuralAttention
-    else:
-        raise NotImplementedError('Constructor model \"{}\" not '
-                                  'implemented!'.format(hparams.model_str))
-
     neural_kwargs = {'n_classes': len(hdataset.labels_to_idx),
-                     'fine_tune': hparams.fine_tune}
+                     'fine_tune': hparams.fine_tune,
+                     'ffnn': hparams.ffnn}
 
-    # special parameters for a FFNN
-    if hparams.model_str.lower() == 'ffnn':
+    # get the model string and now set the appropriate hyperparameters
+    mstr = hparams.model_str.lower()
+
+    if mstr == 'logreg':
+        neural_constructor = LogisticRegression
+    elif mstr == 'ffnn':
+        neural_constructor = FFNN
         neural_kwargs.update({'hdim1': hparams.hdim1,
                               'hdim2': hparams.hdim2,
                               'dropout': hparams.dropout})
-
-    elif hparams.model_str.lower() == 'bilstm':
+    elif mstr == 'bilstm':
+        neural_constructor = BiLSTMClassifier
         neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
                               'n_layers': hparams.n_layers,
-                              'dropout': hparams.dropout})
-
-    elif hparams.model_str.lower() == 'att-basic':
-        neural_kwargs.update({'dropout': hparams.dropout,
-                              'distr': hparams.distr_str,
-                              'ffnn': hparams.att_ffnn})
-
-    elif hparams.model_str.lower() == 'att-linear':
-        neural_kwargs.update({'learn_W': True,
                               'dropout': hparams.dropout,
-                              'distr': hparams.distr_str,
-                              'ffnn': hparams.att_ffnn})
-
-    elif hparams.model_str.lower() == 'att-neural':
+                              'max_pool': False})
+    elif mstr == 'bilstm-max':
+        neural_constructor = BiLSTMClassifier
+        neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
+                              'n_layers': hparams.n_layers,
+                              'dropout': hparams.dropout,
+                              'max_pool': True})
+    elif mstr == 'att-basic':
+        neural_constructor = BasicAttention
+        neural_kwargs.update({'learn_W': False,
+                              'dropout': hparams.dropout,
+                              'distr': hparams.distr_str})
+    elif mstr == 'att-diag':
+        neural_constructor = BasicAttention
+        neural_kwargs.update({'learn_W': True,
+                              'diagonal_W': True,
+                              'dropout': hparams.dropout,
+                              'distr': hparams.distr_str})
+    elif mstr == 'att-linear':
+        neural_constructor = BasicAttention
+        neural_kwargs.update({'learn_W': True,
+                              'diagonal_W': False,
+                              'dropout': hparams.dropout,
+                              'distr': hparams.distr_str})
+    elif mstr == 'att-neural':
+        neural_constructor = NeuralAttention
         neural_kwargs.update({'dropout': hparams.dropout,
                               'distr': hparams.distr_str,
-                              'act': hparams.act_str,
-                              'ffnn': hparams.att_ffnn})
+                              'act': hparams.act_str})
+    else:
+        raise NotImplementedError('Constructor model \"{}\" not '
+                                  'implemented!'.format(mstr))
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())

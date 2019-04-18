@@ -24,6 +24,32 @@ def most_similar(embs):
             print('\tcosine sim:  {}'.format(', '.join(sim_cos)))
 
 
+def most_similar_poly(embs):
+    wvecs = ['bank', 'new']
+    cvec1s = ['teller', 'york']
+    cvec2s = ['river', 'car']
+    embs.normalize()
+    embs.V = torch.clamp(embs.V, 0, 100)
+    embs.W = torch.clamp(embs.W, 0, 100)
+
+    for wvec, cvec1, cvec2 in zip(wvecs, cvec1s, cvec2s):
+        for cvec in [cvec1, cvec2]:
+            v = embs.get_vec(wvec)
+            c = embs.get_covec(cvec) 
+            dprod = '{:.3f}'.format(v.dot(c))
+            print(f'Combining \"{wvec}\" and \"{cvec}\": <i|j> = {dprod}')
+            vc = v * c
+
+            # compare to vectors and covectors for both
+            for mat, name in zip([embs.V, embs.W], ['vectors', 'covectors']): 
+                prods = mat @ vc
+                top_ids = torch.argsort(prods)[-5:]
+                words = [embs.dictionary.get_token(i) for i in top_ids]
+                print(f'\tmost similar {name} to this combination:')
+                print('\t  {}'.format(' '.join(words)))
+                print()
+
+
 # first test, compare related and unrelated words
 def test_embs(embs):
     simwords = ['money', 'dollar', 'stock', 'buy', 'spend', 'purchase', 'rich']
@@ -96,11 +122,17 @@ def viz_embs(name, embs, dopca=True):
     plt.legend()
     plt.savefig(f'png/{name}-viz', bbox_inches='tight')
 
+
+
+
+
+
+
 #hal_examine(embs)
 #test_embs(embs)
-most_similar(embs)
+#most_similar(embs)
+most_similar_poly(embs)
 #viz_embs(path.split('/')[-1], embs, dopca=False)
-import pdb;pdb.set_trace()
 exit(0)
 
 # test the rotational similarity

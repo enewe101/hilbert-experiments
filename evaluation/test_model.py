@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 from evaluation.run_experiments import load_embeddings
-from evaluation.torch_model import BasicAttention, NeuralAttention, _build_padding_mask, _mask_to_tensor
+from evaluation.torch_model_base import _build_padding_mask, _mask_to_tensor
+from evaluation.torch_model import BasicAttention, NeuralAttention, BiLSTMClassifier
 
 
 
@@ -34,7 +35,7 @@ if __name__ == '__main__':
                    (mij != np.inf and xij != padding_id)
 
     mT = _mask_to_tensor(mask, B)
-    pad_energy = -1e4
+    pad_energy = -1e6
 
     assert (mT.shape == (B, L, L))
     for s, energy_mask in enumerate(mT):
@@ -50,10 +51,14 @@ if __name__ == '__main__':
             assert (torch.all(energy_mask == torch.zeros((L, L))))
 
 
-    h_embs = load_embeddings('HBT-MLE-FINAL-v50k', device='cpu',
+    h_embs = load_embeddings('additional/HBT-MLE-FINAL-v50k', device='cpu',
                              normalize=True, standardize=True)
 
+    # LSTM testing
     for b in [True, False]:
+        lstm = BiLSTMClassifier(h_embs, 2, 128, n_layers=1, max_pool=b)
+        preds = lstm(X, pads)
+
         for c in [BasicAttention, NeuralAttention]:
             for ffnn in [True, False]:
                 kwargs = {'learn_W': b} if c==BasicAttention else {}

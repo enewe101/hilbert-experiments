@@ -1,244 +1,70 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from evaluation.hparams import HParams
+import evaluation.torch_model_base as tmb
 
 
-PAD_ENERGY = np.inf
-
-
-def xavier(d):
-    return nn.init.xavier_uniform_(torch.zeros((d, d),
-                                   device=HParams.DEVICE))
-
-def get_distr_fun(distr_str):
-    if distr_str == 'softmax':
-        return lambda tensor: torch.softmax(tensor, dim=1)
-    if distr_str == 'sigmoid':
-        return torch.sigmoid
-    raise NotImplementedError('No distribution function \"{}\"!'.format(distr_str))
-
-def get_act_fun(act_str):
-    if act_str == 'sigmoid':
-        return torch.sigmoid
-    if act_str == 'relu':
-        return torch.relu
-    if act_str == 'tanh':
-        return torch.tanh
-    raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
-
-def _build_padding_mask(B, L, pads):
-    """ Returns a BxL matrix for padding! """
-    ## we will now construct the padding matrix from the pads LongTensor
-    P = torch.empty((L, B), device=HParams.DEVICE)  # will transpose after
-    P[:] = L - pads  # now it is a matrix with number of words as each value
-    P = P.t().float()  # transpose back to be proper
-
-    # now we are building up a matrix of indices to properly build the padding matrix
-    Z = torch.empty((B, L), device=HParams.DEVICE)
-    Z[:] = torch.arange(L).float()
-
-    # now use np.where to figure out where to put infinities for padding
-    mask = torch.where(Z < P,
-                       torch.FloatTensor([1]).to(HParams.DEVICE),
-                       torch.FloatTensor([PAD_ENERGY]).to(HParams.DEVICE))
-    return mask
-
-def _mask_to_tensor(mask, bsz):
-    mT = torch.bmm(mask.unsqueeze(2), mask.reshape(bsz, 1, -1))
-    mT -= 1 # turn the ones into zeros
-    mT[mT == np.inf] = -1e4
-    return mT
-
-def apply_energy_mask(Es, bsz, max_len, pads):
-    mask = _build_padding_mask(bsz, max_len, pads)
-    mT = _mask_to_tensor(mask, bsz)
-    mEs = Es + mT
-    return mEs
-
-
-
-
-# Generic model to feed forward token sequences to embeddings
-class EmbeddingModel(nn.Module):
-    """
-    Generic module that stores pre-trained embeddings for any
-    other neural model we'll be implementing.
-    """
-    def __init__(self, h_embs, fine_tune=True, zero_padding=False, store_covecs=False):
-        super(EmbeddingModel, self).__init__()
-
-        _dim = h_embs.dim
-        _n_embs = len(h_embs.dictionary) + 2 # including unk & padding
-
-        # set ids for the two
-        self.unk_id = len(h_embs.dictionary)
-        self.padding_id = len(h_embs.dictionary) + 1
-
-        # set up the padding embeddings
-        if zero_padding:
-            _padding = torch.zeros(1, _dim).to(HParams.DEVICE)
-
-        else:
-            _padding = torch.from_numpy(np.random.normal(
-                -0.15, 0.15, _dim
-            )).reshape(1, -1).float().to(HParams.DEVICE)
-
-
-        # combine them all
-        _all_embs = torch.cat((h_embs.matrix.float(),
-                               h_embs.unk.float().reshape(1, -1),
-                               _padding), dim=0).to(HParams.DEVICE)
-
-        # now, put the pretrained ones into them
-        self.torch_padding_id = torch.LongTensor([self.padding_id]).to(HParams.DEVICE)
-
-        # if we want to use zero padding we need this kwarg
-        _emb_kwarg = {'padding_idx': self.padding_id} if zero_padding else {}
-        self.embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg)
-        self.embeddings.weight = nn.Parameter(_all_embs, requires_grad=fine_tune)
-        self.emb_dim = _dim
-
-        # store the covectors in an nn.Embeddings?
-        if store_covecs:
-            _covecs = torch.cat((h_embs.covecs.float(),
-                                 h_embs.unk.float().reshape(1, -1),
-                                 _padding), dim=0).to(HParams.DEVICE)
-            self.covec_embeddings = nn.Embedding(_n_embs, _dim, **_emb_kwarg)
-            self.embeddings.weight = nn.Parameter(_covecs, requires_grad=fine_tune)
-
-
-    def forward(self, token_seqs, get_covecs=False):
-        if get_covecs:
-            return self.embeddings(token_seqs), self.covec_embeddings(token_seqs)
-        return self.embeddings(token_seqs)
-
-
-    def get_padding_vec(self):
-        return self.embeddings(self.torch_padding_id).reshape(self.emb_dim)
-
-
-
-# embedding pooler, useful for FFNNs and Logistic Regression
-class EmbeddingPooler(EmbeddingModel):
-    """
-    Generic class for doing pooled word embeddings. Works quite simply
-    - it pools together word embeddings according to either mean
-    pooling, max pooling, or both. It ignores padding.
-    """
-    def __init__(self, h_embs, pooling='mean', **kwargs):
-        super(EmbeddingPooler, self).__init__(h_embs, **kwargs)
-        self.pooling = pooling
-        self.do_mean = self.pooling == 'both' or self.pooling == 'mean'
-        self.do_max = self.pooling == 'both' or self.pooling == 'max'
-
-
-    def forward(self, token_seqs, pads=None):
-        embs = super(EmbeddingPooler, self).forward(token_seqs)
-
-        # shape of embs is batch_size X max_seq_length X embedding_dim
-        mb_size, max_len, emb_dim = embs.shape
-
-        mean_seqs = None # mb_size X emb_dim
-        if self.do_mean:
-            # here we are constructing the padding offsets to factor in during the
-            # computation of the mean vectors. Much faster than a for-loop.
-            padding_offset = self.get_padding_vec().repeat(mb_size).reshape(mb_size, emb_dim)
-            padding_offset *= pads.float().reshape(mb_size, 1)
-
-            # now we sum up the sequences (which includes the padding in them)
-            mean_seqs = embs.sum(dim=1)
-
-            # now we subtract away the padding vectors
-            mean_seqs -= padding_offset
-
-            # now we divide by the true length of the sequences, giving us the means
-            mean_seqs /= (max_len - pads).float().reshape(mb_size, 1)
-
-        max_seqs = None # mb_size X emb_dim
-        if self.do_max:
-            # here we will have to ignore the padding, it won't have the max values anyway
-            max_seqs, _ = embs.max(dim=1)
-
-        # return the big boys
-        if (mean_seqs is not None) and (max_seqs is not None):
-            return torch.cat((max_seqs, mean_seqs), dim=1)
-        return mean_seqs if mean_seqs is not None else max_seqs
-
-
-
-# classes for the actual learning models
-class LogisticRegression(EmbeddingPooler):
+# Uses logistic regression on pooled word embeddings; i.e., no non-linearities.
+class LogisticRegression(tmb.EmbeddingPooler):
     def __init__(self, h_embs, n_classes, pooling='mean', **kwargs):
         super(LogisticRegression, self).__init__(
             h_embs, pooling=pooling, **kwargs)
-
-        # number of input features
         in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
-        self.output = nn.Linear(in_features, n_classes)
-
+        self.classifier = tmb.MLPClassifier(in_features, n_classes, linear=True)
 
     def forward(self, token_seqs, pads=None):
         pooled_embs = super(LogisticRegression, self).forward(token_seqs, pads)
-        return self.output(pooled_embs)
+        return self.classifier(pooled_embs)
 
 
-
-# Basic FNN for classification on pooled word embeddings
-class FFNN(EmbeddingPooler):
+# Basic FNN for classification on pooled word embeddings. The interpretation is that
+# the sentence representation is the pooled word embeddings after being activated
+# by the first hidden layer of the FFNN, which is then passed through a 1-layer
+# MLP classifier.
+class FFNN(tmb.EmbeddingPooler):
     def __init__(self, h_embs, n_classes, hdim1, hdim2, dropout=0., pooling='mean', **kwargs):
         super(FFNN, self).__init__(h_embs, pooling=pooling, **kwargs)
         assert hdim1 > 0 and hdim2 > 0
-
-        # number of input features
         in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
         self.model = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features, hdim1),
-            nn.ReLU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(hdim1, hdim2),
-            nn.ReLU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(hdim2, n_classes)
-        )
+            nn.ReLU())
+        self.classifier = tmb.MLPClassifier(hdim1, n_classes, h_dim=hdim2,
+                                            dropout=dropout, linear=False)
 
     def forward(self, token_seqs, pads=None):
         pooled_embs = super(FFNN, self).forward(token_seqs, pads)
-        return self.model(pooled_embs)
+        return self.classifier(self.model(pooled_embs))
 
 
 
-# Sequences transformer network with attention, for classification
-class BasicAttention(EmbeddingModel):
+# Sequences transformer network with attention, for classification.
+class BasicAttention(tmb.EmbeddingModel):
 
-    def __init__(self, h_embs, n_classes,
-                 learn_W=False,
-                 dropout=0,
-                 distr='softmax',
-                 ffnn=False,
-                 **kwargs):
+    def __init__(self, h_embs, n_classes, learn_W=False, diagonal_W=False,
+                 dropout=0, distr='softmax', ffnn=True, **kwargs):
 
         super(BasicAttention, self).__init__(h_embs,
               zero_padding=True, store_covecs=True, **kwargs)
 
-        self.n_classes = n_classes
-        self.vasawani = torch.sqrt(torch.FloatTensor([self.emb_dim])).to(HParams.DEVICE)
-        self.W = xavier(self.emb_dim) if learn_W else torch.eye(self.emb_dim)
-        self.W = nn.Parameter(self.W, requires_grad=learn_W)
-        self.dropout = nn.Dropout(p=dropout)
-        self.distr = get_distr_fun(distr)
-        if ffnn:
-            self.rep_to_class = nn.Sequential(
-                nn.Dropout(p=dropout),
-                nn.Linear(2 * self.emb_dim, self.emb_dim),
-                nn.ReLU(),
-                nn.Dropout(p=dropout),
-                nn.Linear(self.emb_dim, self.n_classes),
-            )
+        # most important here is how we parameterize the internal W
+        # matrix that augments vector-covector dot products.
+        # So, W is either a dxd matrix or d-dimensional vector.
+        if learn_W:
+            self.W = tmb.rvector(self.emb_dim) if diagonal_W else \
+                     tmb.rmatrix(self.emb_dim)
+            self.W = nn.Parameter(self.W, requires_grad=True)
         else:
-            self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
+            self.W = torch.ones(self.emb_dim).to(HParams.DEVICE)
+
+        self.n_classes = n_classes
+        self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
+        self.dropout = nn.Dropout(p=dropout)
+        self.distr = tmb.get_distr_fun(distr)
+        self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
+                                            dropout=dropout, linear=ffnn)
 
 
     def forward(self, token_seqs, pads=None):
@@ -257,12 +83,15 @@ class BasicAttention(EmbeddingModel):
         Qs = self.dropout(covec_seqs) # B x L x d
 
         # get energy matrices with batch-wise multiplications,
-        # after doing the W map on to K and transposing the Qs
+        # after doing the W map on to K and then transposing the Qs
         # i.e., .transpose(1,2) -> B x d x L
-        Es = torch.bmm(Ks @ self.W, Qs.transpose(1, 2)) / self.vasawani
+        # note that the w-map can be parameterized as a diagonal matrix,
+        # and thus just an element wise vector multiplication.
+        mapped_Ks = Ks @ self.W if len(self.W.shape) == 2 else Ks * self.W
+        Es = torch.bmm(mapped_Ks, Qs.transpose(1, 2)) / self.vasawani
 
         # get the mask tensor and apply it to the energy matrix!
-        Es = apply_energy_mask(Es, bsz, max_len, pads)
+        Es = tmb.apply_energy_mask(Es, bsz, max_len, pads)
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
@@ -275,19 +104,19 @@ class BasicAttention(EmbeddingModel):
 
         # basically done, just conccat and then predict!
         X = torch.cat((vK, vQ), dim=1)
-        y = self.rep_to_class(X)
+        y = self.classifier(X)
         return F.log_softmax(y, dim=1).squeeze()
 
 
 
 # Sequences transformer network with attention, for classification
-class NeuralAttention(EmbeddingModel):
+class NeuralAttention(tmb.EmbeddingModel):
 
     def __init__(self, h_embs, n_classes,
                  dropout=0,
                  act='sigmoid',
                  distr='softmax',
-                 ffnn=False,
+                 ffnn=True,
                  **kwargs):
 
         super(NeuralAttention, self).__init__(
@@ -295,27 +124,19 @@ class NeuralAttention(EmbeddingModel):
         )
 
         # matrices for neural transformations
-        self.Wk = nn.Parameter(xavier(self.emb_dim))
-        self.Wq = nn.Parameter(xavier(self.emb_dim))
-        self.Wvk = nn.Parameter(xavier(self.emb_dim))
-        self.Wvq = nn.Parameter(xavier(self.emb_dim))
+        self.Wk = nn.Parameter(tmb.rmatrix(self.emb_dim))
+        self.Wq = nn.Parameter(tmb.rmatrix(self.emb_dim))
+        self.Wvk = nn.Parameter(tmb.rmatrix(self.emb_dim))
+        self.Wvq = nn.Parameter(tmb.rmatrix(self.emb_dim))
 
         # other aspects
-        self.vasawani = torch.sqrt(torch.FloatTensor([self.emb_dim])).to(HParams.DEVICE)
-        self.distr = get_distr_fun(distr)
-        self.act = get_act_fun(act)
-        self.dropout = nn.Dropout(p=dropout)
         self.n_classes = n_classes
-        if ffnn:
-            self.rep_to_class = nn.Sequential(
-                nn.Dropout(p=dropout),
-                nn.Linear(2 * self.emb_dim, self.emb_dim),
-                nn.ReLU(),
-                nn.Dropout(p=dropout),
-                nn.Linear(self.emb_dim, self.n_classes),
-            )
-        else:
-            self.rep_to_class = nn.Linear(2 * self.emb_dim, self.n_classes)
+        self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
+        self.distr = tmb.get_distr_fun(distr)
+        self.act = tmb.get_act_fun(act)
+        self.dropout = nn.Dropout(p=dropout)
+        self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
+                                            dropout=dropout, linear=ffnn)
 
 
     def forward(self, token_seqs, pads=None):
@@ -323,6 +144,7 @@ class NeuralAttention(EmbeddingModel):
             token_seqs, get_covecs=True
         )
         assert (vec_seqs.shape == covec_seqs.shape)
+        assert (pads is not None)
 
         # note: seqs -> (batch_size, max_seq_len, embedding_dim)
         bsz, max_len, emb_dim = vec_seqs.shape
@@ -337,7 +159,7 @@ class NeuralAttention(EmbeddingModel):
         Es = torch.bmm(eKs, eQs.transpose(1,2)) / self.vasawani
 
         # get the mask tensor and apply it to the energy matrix!
-        Es = apply_energy_mask(Es, bsz, max_len, pads)
+        Es = tmb.apply_energy_mask(Es, bsz, max_len, pads)
 
         # now get attention matrices from across the batch
         Ak = self.distr(torch.max(Es, dim=1)[0]).reshape(bsz, 1, max_len)
@@ -353,21 +175,25 @@ class NeuralAttention(EmbeddingModel):
 
         # basically done, just conccat and then predict!
         X = torch.cat((vK, vQ), dim=1)
-        y = self.rep_to_class(X)
+        y = self.classifier(X)
         return F.log_softmax(y, dim=1).squeeze()
 
 
 
 # Basic BiLSTM for classification of word sequences.
-class BiLSTMClassifier(EmbeddingModel):
+class BiLSTMClassifier(tmb.EmbeddingModel):
 
-    def __init__(self, h_embs, n_classes, rnn_hdim, n_layers=1, dropout=0, **kwargs):
+    def __init__(self, h_embs, n_classes, rnn_hdim,
+                 n_layers=1, dropout=0, max_pool=False,
+                 ffnn=True, **kwargs):
+
         super(BiLSTMClassifier, self).__init__(h_embs, zero_padding=True, **kwargs)
         assert rnn_hdim > 0 and n_classes > 0 and n_layers > 0
 
         self.hidden_dim = rnn_hdim
         self.n_layers = n_layers
         self.n_classes = n_classes
+        self.max_pool = max_pool
 
         # the big boy LSTM that does all the work
         self.lstm = nn.LSTM(input_size=self.emb_dim,
@@ -378,7 +204,8 @@ class BiLSTMClassifier(EmbeddingModel):
                             dropout=dropout)
 
         # output label prediction at each time step
-        self.hidden_to_class = nn.Linear(self.hidden_dim * 2, self.n_classes)
+        self.classifier = tmb.MLPClassifier(2 * self.hidden_dim, n_classes,
+                                            dropout=dropout, linear=ffnn)
 
         # don't do hidden initialization until we know the batch size
         self.hidden = None
@@ -402,12 +229,25 @@ class BiLSTMClassifier(EmbeddingModel):
 
         # feed throught the bilstm
         X, (hidden_state, cell_state) = self.lstm(X, self.hidden)
-        last_backward = hidden_state[-1, :, :]
-        last_forward = hidden_state[-2, :, :]
-        state_concat = torch.cat((last_forward, last_backward), dim=1)
 
-        # run through the linear tag prediction
-        Y = self.hidden_to_class(state_concat) # dim is bsz X n_labels
+        # The max-pooling is from Conneau et al.'s 2017 EMNLP paper on sentence embedding.
+        if self.max_pool:
+            X = nn.utils.rnn.pad_packed_sequence(X, batch_first=True)[0]
+
+            # shape of X is B x L x 2h, so need to max-pool along dim=1, L
+            X = torch.max(X, dim=1)[0]
+            assert (X.shape == (bsz, self.hidden_dim * 2))
+
+        # Otherwise, do first-last concatenation, as done in our ICML paper.
+        # This facilities if we are using multiple layered-LSTMs, so that's why
+        # we grab from the hidden state using negative indices.
+        else:
+            last_backward = hidden_state[-1, :, :]
+            last_forward = hidden_state[-2, :, :]
+            X = torch.cat((last_forward, last_backward), dim=1)
+
+        # run through the classifier
+        Y = self.classifier(X) # dim is bsz X n_labels
 
         # softmax activations in the feed forward for an easy main method
         Y_hat = F.log_softmax(Y, dim=1)
@@ -415,8 +255,11 @@ class BiLSTMClassifier(EmbeddingModel):
 
 
 
-# LSTM for sequence labelling (POS-tagging!)
-class SeqLabLSTM(EmbeddingModel):
+
+####### Sequenece Labelling Models! Just one, BiLSTM #########
+
+# LSTM for sequence labelling (POS-tagging & SS-tagging)
+class SeqLabLSTM(tmb.EmbeddingModel):
 
     # universal constant, do not change!
     PADDING_LABEL_ID = 0
