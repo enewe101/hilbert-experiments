@@ -50,7 +50,7 @@ class HParams(object):
             help='pass to fine tune embeddings from gradient'
         )
         parser.add_argument(
-            '--opt_str', type=str, default='adam', choices=['adam', 'sgd'],
+            '--opt_str', type=str, default='adam', choices=['adam', 'sgd', 'sgd-m'],
             help=(
                 "string to pass for the optimizer option, every model will use "
                 "learning rate scheduling appropiately. The two options are: "
@@ -64,7 +64,6 @@ class HParams(object):
         parser.add_argument(
             '--dropout', type=float, default=0., help='dropout probability'
         )
-
 
         ### Classification parameters
         parser.add_argument(
