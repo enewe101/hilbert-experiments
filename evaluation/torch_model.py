@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from evaluation.hparams import HParams
 import evaluation.torch_model_base as tmb
+import evaluation.factories as factories
+from evaluation.hparams import HParams
 
 
 # Uses logistic regression on pooled word embeddings; i.e., no non-linearities.
@@ -31,7 +32,8 @@ class FFNN(tmb.EmbeddingPooler):
         self.model = nn.Sequential(
             nn.Dropout(p=dropout),
             nn.Linear(in_features, hdim1),
-            nn.ReLU())
+            nn.LeakyReLU()
+        )
         self.classifier = tmb.MLPClassifier(hdim1, n_classes, h_dim=hdim2,
                                             dropout=dropout, linear=False)
 
@@ -65,7 +67,7 @@ class BasicAttention(tmb.EmbeddingModel):
         self.n_classes = n_classes
         self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
         self.dropout = nn.Dropout(p=dropout)
-        self.distr = tmb.get_distr_fun(distr)
+        self.distr = factories.get_distr_fun(distr)
         self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
                                             dropout=dropout, linear=ffnn)
 
@@ -138,8 +140,8 @@ class NeuralAttention(tmb.EmbeddingModel):
         # other aspects
         self.n_classes = n_classes
         self.vasawani = torch.sqrt(tmb.torch_scalar(self.emb_dim))
-        self.distr = tmb.get_distr_fun(distr)
-        self.act = tmb.get_act_fun(act)
+        self.distr = factories.get_distr_fun(distr)
+        self.act = factories.get_act_fun(act)
         self.dropout = nn.Dropout(p=dropout)
         self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
                                             dropout=dropout, linear=ffnn)

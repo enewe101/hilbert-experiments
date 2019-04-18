@@ -2,6 +2,25 @@ import torch
 import evaluation.torch_model as tm
 
 
+
+def get_distr_fun(distr_str):
+    if distr_str == 'softmax':
+        return lambda tensor: torch.softmax(tensor, dim=1)
+    if distr_str == 'sigmoid':
+        return torch.sigmoid
+    raise NotImplementedError('No distribution function \"{}\"!'.format(distr_str))
+
+
+def get_act_fun(act_str):
+    if act_str == 'sigmoid':
+        return torch.sigmoid
+    if act_str == 'relu':
+        return torch.relu
+    if act_str == 'tanh':
+        return torch.tanh
+    raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
+
+
 def get_optimizer_scheduler(nn_module, opt_str, early_stop):
     # learning rate scheduler to maximize the validation set accuracy.
     # default with a dummy scheduler where no change occurs

@@ -18,25 +18,6 @@ def rvector(d):
     return nn.init.xavier_uniform_(torch.zeros((d, 1),
                                    device=HParams.DEVICE)).reshape(-1)
 
-
-def get_distr_fun(distr_str):
-    if distr_str == 'softmax':
-        return lambda tensor: torch.softmax(tensor, dim=1)
-    if distr_str == 'sigmoid':
-        return torch.sigmoid
-    raise NotImplementedError('No distribution function \"{}\"!'.format(distr_str))
-
-
-def get_act_fun(act_str):
-    if act_str == 'sigmoid':
-        return torch.sigmoid
-    if act_str == 'relu':
-        return torch.relu
-    if act_str == 'tanh':
-        return torch.tanh
-    raise NotImplementedError('No activation function \"{}\"!'.format(act_str))
-
-
 def _build_padding_mask(B, L, pads):
     """ Returns a BxL matrix for padding! """
     ## we will now construct the padding matrix from the pads LongTensor
@@ -84,7 +65,7 @@ class MLPClassifier(nn.Module):
             self.model = nn.Sequential(
                 nn.Dropout(p=dropout),
                 nn.Linear(in_features, h_dim),
-                nn.ReLU(),
+                nn.LeakyReLU(),
                 nn.Dropout(p=dropout),
                 nn.Linear(h_dim, n_classes))
 
