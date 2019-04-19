@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from evaluation.run_experiments import load_embeddings
 from evaluation.torch_model_base import _build_padding_mask, _mask_to_tensor
-from evaluation.torch_model import BasicAttention, NeuralAttention, BiLSTMClassifier
+from evaluation.torch_model import BasicAttention, NeuralAttention, BiLSTMClassifier, BasicPooling
 
 
 
@@ -58,6 +58,9 @@ if __name__ == '__main__':
     for b in [True, False]:
         lstm = BiLSTMClassifier(h_embs, 2, 128, n_layers=1, max_pool=b)
         preds = lstm(X, pads)
+
+        basic = BasicPooling(h_embs, 2, pooling='mean', usecovecs=b)
+        bpreds = basic(X, pads)
 
         for c in [BasicAttention, NeuralAttention]:
             for ffnn in [True, False]:

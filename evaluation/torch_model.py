@@ -5,48 +5,65 @@ import evaluation.torch_model_base as tmb
 from evaluation.hparams import HParams
 
 
-# Uses logistic regression on pooled word embeddings; i.e., no non-linearities.
-class LogisticRegression(tmb.EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, pooling='mean', **kwargs):
-        super(LogisticRegression, self).__init__(
-            h_embs, pooling=pooling, **kwargs)
-        in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
-        self.classifier = tmb.MLPClassifier(in_features, n_classes, linear=True)
+# Most simple type of embedding pooler, allowing for mean-max pooling.
+class BasicPooling(tmb.EmbeddingModel):
+
+    def __init__(self, h_embs, nclasses,
+                 pooling='max',
+                 usecovecs=True,
+                 dropout=0,
+                 ffnn=True,
+                 **kwargs):
+
+        super(BasicPooling, self).__init__(h_embs, store_covecs=usecovecs,
+                                           zero_padding=True, **kwargs)
+        self.covecs = usecovecs
+        self.do_mean = pooling == 'mean'
+
+        in_feats = 2 * self.emb_dim if self.covecs else self.emb_dim
+        self.classifier = tmb.MLPClassifier(in_feats, nclasses, dropout=dropout, nonlinear=ffnn)
+
 
     def forward(self, token_seqs, pads=None):
-        pooled_embs = super(LogisticRegression, self).forward(token_seqs, pads)
-        return self.classifier(pooled_embs)
+        assert (pads is not None)
+        vec_embs, covec_embs = super(BasicPooling, self).forward(
+            token_seqs, get_covecs=self.covecs
+        ) # shape is B x L x d
+        B, L, d = vec_embs.shape
 
+        if self.do_mean:
+            vec_embs = torch.sum(vec_embs, dim=1)
+            vec_embs = (vec_embs.t() / (L - pads.float())).t()
+            if self.covecs:
+                covec_embs = torch.sum(covec_embs, dim=1)
+                covec_embs = (covec_embs.t() / (L - pads.float())).t()
 
+        else: # do max
+            vec_embs = torch.max(vec_embs, dim=1)[0]
+            if self.covecs:
+                covec_embs = torch.max(covec_embs, dim=1)[0]
 
-# Basic FNN for classification on pooled word embeddings. The interpretation is that
-# the sentence representation is the pooled word embeddings after being activated
-# by the first hidden layer of the FFNN, which is then passed through a 1-layer
-# MLP classifier.
-class FFNN(tmb.EmbeddingPooler):
-    def __init__(self, h_embs, n_classes, hdim1, hdim2, dropout=0., pooling='mean', **kwargs):
-        super(FFNN, self).__init__(h_embs, pooling=pooling, **kwargs)
-        assert hdim1 > 0 and hdim2 > 0
-        in_features = 2 * self.emb_dim if pooling == 'both' else self.emb_dim
-        self.model = nn.Sequential(
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features, hdim1),
-            nn.LeakyReLU()
-        )
-        self.classifier = tmb.MLPClassifier(hdim1, n_classes, h_dim=hdim2,
-                                            dropout=dropout, linear=False)
+        # concatenate etc
+        X = torch.cat((vec_embs, covec_embs), dim=1) if self. covecs else vec_embs
 
-    def forward(self, token_seqs, pads=None):
-        pooled_embs = super(FFNN, self).forward(token_seqs, pads)
-        return self.classifier(self.model(pooled_embs))
+        assert (X.shape[0] == B)
+
+        y = self.classifier(X)
+        return F.log_softmax(y, dim=1).squeeze()
+
 
 
 
 # Sequences transformer network with attention, for classification.
 class BasicAttention(tmb.EmbeddingModel):
 
-    def __init__(self, h_embs, n_classes, learn_W=False, diagonal_W=False,
-                 dropout=0, distr='softmax', ffnn=True, usecovecs=True,
+    def __init__(self, h_embs, n_classes,
+                 learn_W=False,
+                 diagonal_W=False,
+                 dropout=0,
+                 distr='softmax',
+                 ffnn=True,
+                 usecovecs=True,
                  **kwargs):
 
         super(BasicAttention, self).__init__(h_embs,
@@ -68,7 +85,7 @@ class BasicAttention(tmb.EmbeddingModel):
         self.dropout = nn.Dropout(p=dropout)
         self.distr = tmb.get_distr_fun(distr)
         self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
-                                            dropout=dropout, linear=ffnn)
+                                            dropout=dropout, nonlinear=ffnn)
 
 
     def forward(self, token_seqs, pads=None):
@@ -143,7 +160,7 @@ class NeuralAttention(tmb.EmbeddingModel):
         self.act = tmb.get_act_fun(act)
         self.dropout = nn.Dropout(p=dropout)
         self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
-                                            dropout=dropout, linear=ffnn)
+                                            dropout=dropout, nonlinear=ffnn)
 
 
     def forward(self, token_seqs, pads=None):
@@ -213,7 +230,7 @@ class BiLSTMClassifier(tmb.EmbeddingModel):
 
         # output label prediction at each time step
         self.classifier = tmb.MLPClassifier(2 * self.hidden_dim, n_classes,
-                                            dropout=dropout, linear=ffnn)
+                                            dropout=dropout, nonlinear=ffnn)
 
         # don't do hidden initialization until we know the batch size
         self.hidden = None
@@ -227,7 +244,7 @@ class BiLSTMClassifier(tmb.EmbeddingModel):
 
     def forward(self, token_seqs, pads=None):
         # get the tensor with emb sequences, along with the number of pads in each seq
-        emb_seqs = super(BiLSTMClassifier, self).forward(token_seqs)
+        emb_seqs, _ = super(BiLSTMClassifier, self).forward(token_seqs)
 
         # now we gotta do some special packing
         # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)
@@ -255,11 +272,8 @@ class BiLSTMClassifier(tmb.EmbeddingModel):
             X = torch.cat((last_forward, last_backward), dim=1)
 
         # run through the classifier
-        Y = self.classifier(X) # dim is bsz X n_labels
-
-        # softmax activations in the feed forward for an easy main method
-        Y_hat = F.log_softmax(Y, dim=1)
-        return Y_hat.view(bsz, self.n_classes)
+        y = self.classifier(X)
+        return F.log_softmax(y, dim=1).squeeze()
 
 
 
@@ -307,7 +321,7 @@ class SeqLabLSTM(tmb.EmbeddingModel):
 
     def forward(self, sorted_tok_ids, pads):
         # get the tensor with emb sequences, along with the number of pads in each seq
-        emb_seqs = super(SeqLabLSTM, self).forward(sorted_tok_ids)
+        emb_seqs, _ = super(SeqLabLSTM, self).forward(sorted_tok_ids)
 
         # now we gotta do some special packing
         # note: emb_seqs -> (batch_size, max_seq_len, embedding_dim)

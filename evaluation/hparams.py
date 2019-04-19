@@ -67,7 +67,7 @@ class HParams(object):
 
         ### Classification parameters
         parser.add_argument(
-            '--model_str', type=str, choices=['ffnn', 'logreg', 'bilstm', 'bilstm-max',
+            '--model_str', type=str, choices=['pool-mean', 'pool-max', 'bilstm', 'bilstm-max',
                                               'att-basic', 'att-linear', 'att-diag',
                                               'att-neural'],
             help='model string for when model selection is applicable; e.g., classification'

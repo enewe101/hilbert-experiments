@@ -55,37 +55,36 @@ def get_optimizer_scheduler(nn_module, opt_str, early_stop):
 def get_classifier_constr_kwargs(hparams, nclasses):
     neural_kwargs = {'n_classes': nclasses,
                      'fine_tune': hparams.fine_tune,
+                     'dropout': hparams.dropout,
                      'ffnn': hparams.ffnn}
 
     mstr = hparams.model_str.lower()
 
-    if mstr == 'logreg':
-        neural_constructor = tm.LogisticRegression
+    if mstr == 'pool-max':
+        neural_constructor = tm.BasicPooling
+        neural_kwargs.update({'pooling': 'max',
+                              'usecovecs': not hparams.nocovecs})
 
-    elif mstr == 'ffnn':
-        neural_constructor = tm.FFNN
-        neural_kwargs.update({'hdim1': hparams.hdim1,
-                              'hdim2': hparams.hdim2,
-                              'dropout': hparams.dropout})
+    elif mstr == 'pool-mean':
+        neural_constructor = tm.BasicPooling
+        neural_kwargs.update({'pooling': 'mean',
+                              'usecovecs': not hparams.nocovecs})
 
     elif mstr == 'bilstm':
         neural_constructor = tm.BiLSTMClassifier
         neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
                               'n_layers': hparams.n_layers,
-                              'dropout': hparams.dropout,
                               'max_pool': False})
 
     elif mstr == 'bilstm-max':
         neural_constructor = tm.BiLSTMClassifier
         neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
                               'n_layers': hparams.n_layers,
-                              'dropout': hparams.dropout,
                               'max_pool': True})
 
     elif mstr == 'att-basic':
         neural_constructor = tm.BasicAttention
         neural_kwargs.update({'learn_W': False,
-                              'dropout': hparams.dropout,
                               'distr': hparams.distr_str,
                               'usecovecs': not hparams.nocovecs})
 
@@ -93,7 +92,6 @@ def get_classifier_constr_kwargs(hparams, nclasses):
         neural_constructor = tm.BasicAttention
         neural_kwargs.update({'learn_W': True,
                               'diagonal_W': True,
-                              'dropout': hparams.dropout,
                               'distr': hparams.distr_str,
                               'usecovecs': not hparams.nocovecs})
 
@@ -101,14 +99,12 @@ def get_classifier_constr_kwargs(hparams, nclasses):
         neural_constructor = tm.BasicAttention
         neural_kwargs.update({'learn_W': True,
                               'diagonal_W': False,
-                              'dropout': hparams.dropout,
                               'distr': hparams.distr_str,
                               'usecovecs': not hparams.nocovecs})
 
     elif mstr == 'att-neural':
         neural_constructor = tm.NeuralAttention
-        neural_kwargs.update({'dropout': hparams.dropout,
-                              'distr': hparams.distr_str,
+        neural_kwargs.update({'distr': hparams.distr_str,
                               'act': hparams.act_str,
                               'usecovecs': not hparams.nocovecs})
 
