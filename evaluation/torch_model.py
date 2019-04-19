@@ -8,7 +8,7 @@ from evaluation.hparams import HParams
 # Most simple type of embedding pooler, allowing for mean-max pooling.
 class BasicPooling(tmb.EmbeddingModel):
 
-    def __init__(self, h_embs, nclasses,
+    def __init__(self, h_embs, n_classes,
                  pooling='max',
                  usecovecs=True,
                  dropout=0,
@@ -21,7 +21,8 @@ class BasicPooling(tmb.EmbeddingModel):
         self.do_mean = pooling == 'mean'
 
         in_feats = 2 * self.emb_dim if self.covecs else self.emb_dim
-        self.classifier = tmb.MLPClassifier(in_feats, nclasses, dropout=dropout, nonlinear=ffnn)
+        self.classifier = tmb.MLPClassifier(in_feats, n_classes,
+                                            dropout=dropout, nonlinear=ffnn)
 
 
     def forward(self, token_seqs, pads=None):
