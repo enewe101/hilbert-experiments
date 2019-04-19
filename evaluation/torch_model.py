@@ -11,7 +11,7 @@ class BasicPooling(tmb.EmbeddingModel):
     def __init__(self, h_embs, n_classes,
                  pooling='max',
                  usecovecs=True,
-                 dropout=0,
+                 dropout=0.,
                  ffnn=True,
                  **kwargs):
 
@@ -19,6 +19,7 @@ class BasicPooling(tmb.EmbeddingModel):
                                            zero_padding=True, **kwargs)
         self.covecs = usecovecs
         self.do_mean = pooling == 'mean'
+        self.dropout = nn.Dropout(p=dropout)
 
         in_feats = 2 * self.emb_dim if self.covecs else self.emb_dim
         self.classifier = tmb.MLPClassifier(in_feats, n_classes,
@@ -31,6 +32,8 @@ class BasicPooling(tmb.EmbeddingModel):
             token_seqs, get_covecs=self.covecs
         ) # shape is B x L x d
         B, L, d = vec_embs.shape
+        vec_embs = self.dropout(vec_embs)
+        covec_embs = self.dropout(covec_embs) if self.covecs else None
 
         if self.do_mean:
             vec_embs = torch.sum(vec_embs, dim=1)
@@ -51,7 +54,6 @@ class BasicPooling(tmb.EmbeddingModel):
 
         y = self.classifier(X)
         return F.log_softmax(y, dim=1).squeeze()
-
 
 
 

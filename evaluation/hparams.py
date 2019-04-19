@@ -91,16 +91,6 @@ class HParams(object):
             help='make RNN gradient have max norm equal to 1'
         )
 
-        # FFNN parameters
-        parser.add_argument(
-            '--hdim1', type=int, default=512,
-            help='specific dimensionality of a 1st hidden layer of a FFNN'
-        )
-        parser.add_argument(
-            '--hdim2', type=int, default=512,
-            help='specific dimensionality of a 2nd hidden layer of a FFNN'
-        )
-
         # Attention parameters
         parser.add_argument(
             '--distr_str', type=str, choices=['sigmoid', 'softmax'], default='softmax',
