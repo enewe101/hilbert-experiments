@@ -298,11 +298,11 @@ def seq_labelling_exp(embs, hdataset, hparams):
                      'dropout': hparams.dropout,
                      'fine_tune': hparams.fine_tune}
 
-    results = train_seq_labeller(hdataset.name,
-                                 embs,
-                                 neural_constructor,
-                                 neural_kwargs,
-                                 lr=hparams.lr,
+    results = train_seq_labeller(exp_name=hdataset.name,
+                                 h_embs=embs,
+                                 constr=neural_constructor,
+                                 kw_params=neural_kwargs,
+                                 opt_str=hparams.opt_str,
                                  n_epochs=hparams.epochs,
                                  mb_size=hparams.mb_size,
                                  early_stop=10,
@@ -311,9 +311,8 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  te_x=te_x,
                                  te_y=te_y,
                                  normalize_gradient=hparams.normalize_gradient,
-                                 schedule_lr=hparams.schedule_lr,
                                  sst_labels=sst_labels,
-                                 verbose=True,)
+                                 verbose=True)
     return results
 
 

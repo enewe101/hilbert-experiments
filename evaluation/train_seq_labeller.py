@@ -1,11 +1,11 @@
 import torch
 from collections import defaultdict
-from torch.optim import lr_scheduler
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
 from evaluation.train_classifier import sort_by_length
 from evaluation.torch_model import SeqLabLSTM
+from evaluation.factories import get_optimizer_scheduler
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
 from evaluation.seq_batch_loader import SequenceLoader
@@ -54,9 +54,8 @@ def feed_full_seq_ds(neural_model, seqloader, sst_labels=None):
 
 
 def train_seq_labeller(exp_name, h_embs, constr, kw_params,
-                       lr, n_epochs, mb_size, early_stop,
+                       opt_str, n_epochs, mb_size, early_stop,
                        tr_x, tr_y, te_x, te_y,
-                       schedule_lr=False,
                        normalize_gradient=False,
                        sst_labels=None,
                        verbose=True):
@@ -66,7 +65,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
     :param h_embs: HilbertEmbeddings object
     :param constr: constructor that extends EmbeddingModel
     :param kw_params: dictionary of kwargs
-    :param lr: learning rate
+    :param opt_str: string for the optimizer
     :param n_epochs: number of epochs to train for
     :param mb_size: size of minibatches
     :param early_stop: number of epochs to stop after no improvement is seen
@@ -74,7 +73,6 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
     :param tr_y: training set y from a Hilbert dataset
     :param te_x: test set X from a Hilbert dataset
     :param te_y: test set y from a Hilbert dataset
-    :param schedule_lr: use a plateau-based scheduled learning rate
     :param normalize_gradient: perform gradient normalization, making max norm be 1
     :param sst_labels: the relevant labels for supersense tagging (if we're doing it)
     :param verbose: if true, display everything at every epoch
@@ -101,12 +99,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
 
     # learning rate scheduler to maximize the validation set accuracy.
     # default with a dummy scheduler where no change occurs
-    optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr)
-    scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=early_stop // 5, mode='max',
-        min_lr=0 if schedule_lr else lr, verbose=verbose
-    )
-    model_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer, scheduler = get_optimizer_scheduler(model, opt_str, early_stop)
 
     # results storage
     results = defaultdict(lambda: [])
