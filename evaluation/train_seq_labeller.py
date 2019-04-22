@@ -91,6 +91,7 @@ def train_seq_labeller(exp_name, h_embs, constr, kw_params,
 
     # initialize torch things
     model = constr(h_embs, **kw_params).to(HParams.DEVICE)
+    model_params = [p for p in model.parameters() if p.requires_grad]
 
     # initialize data loaders
     tr_loader = SequenceLoader(tr_x, tr_y, mb_size, model.padding_id, seq_labelling=True)
