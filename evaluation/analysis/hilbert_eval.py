@@ -20,6 +20,9 @@ KIAN_PATH = (
 
 ########## Helper functions ###########
 #---------                  ----------#
+
+
+# This should hanlde number-only names.  Enough with this "iter-200" business.
 def get_all_iters(path):
     iters = []
     for i, d in enumerate(reversed(sorted(os.listdir(path)))):
@@ -139,7 +142,9 @@ def load_emb_results(path, dsname):
     raise FileNotFoundError('No results for {} computed yet!'.format(path))
 
 
-def plot_performance(results_list, epochs, save_path='', targs=None, reskey='full-spearman'):
+def plot_performance(
+    results_list, epochs, save_path='', targs=None, reskey='full-spearman'
+):
     results = defaultdict(lambda: [])
     for r in results_list:
         for dsname, dsres in r.results_by_dataset.items():
@@ -297,42 +302,73 @@ def svd_comparison(sample_path, target_path, args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('sample', type=str, nargs='+',
-                        help='the sample director(y/ies) to evaluate embeddings')
+    parser.add_argument(
+        'sample', type=str, nargs='+',
+        help='the sample director(y/ies) to evaluate embeddings'
+    )
 
-    parser.add_argument('-c', '--compareto', type=str, default='',
-                        help='the directory containing embeddings we would like to'
-                             ' compare the target to')
+    parser.add_argument(
+        '-c', '--compareto', type=str, default='',
+        help=(
+            'the directory containing embeddings we would like to '
+            'compare the target to'
+        )
+    )
 
-    parser.add_argument('-C', '--save_compare', action='store_true',
-                        help='serialize the comparison results into the results file')
+    parser.add_argument(
+        '-C', '--save_compare', action='store_true',
+        help='serialize the comparison results into the results file'
+    )
 
-    parser.add_argument('-e', '--eval', action='store_true',
-                        help='set to evaluate all embeddings in target')
+    parser.add_argument(
+        '-e', '--eval', action='store_true',
+        help='set to evaluate all embeddings in target'
+    )
 
-    parser.add_argument('-o', '--overwrite', action='store_true',
-                        help='set to overwrite previous similarity results')
+    parser.add_argument(
+        '-o', '--overwrite', action='store_true',
+        help='set to overwrite previous similarity results'
+    )
 
-    parser.add_argument('-v', '--viz', action='store_true',
-                        help='set to show performance charts')
+    parser.add_argument(
+        '-v', '--viz', action='store_true',
+        help='set to show performance charts'
+    )
 
-    parser.add_argument('-s', '--save', action='store_true',
-                        help='set to save performance charts and not show')
+    parser.add_argument(
+        '-s', '--save', action='store_true',
+        help='set to save performance charts and not show'
+    )
 
-    parser.add_argument('-G', '--glove_avg', action='store_true',
-                        help='set to average the vectors and covectors in experiments')
+    parser.add_argument(
+        '-G', '--glove_avg', action='store_true',
+        help='set to average the vectors and covectors in experiments'
+    )
 
     parser.add_argument('--svd', action='store_true',
                         help='set to run SVD experiments')
 
-    parser.add_argument('--svdc', type=str, default='',
-                        help='pass this string to do a comparison with SVD from the passed directory')
+    parser.add_argument(
+        '--svdc', type=str, default='',
+        help=(
+            'pass this string to do a comparison with SVD from the passed '
+            'directory'
+        )
+    )
 
-    parser.add_argument('--svdg', type=float, default=0.,
-                        help='set the gamma value for augmenting SVDs eigenvalues')
+    parser.add_argument(
+        '--svdg', type=float, default=0.,
+        help='set the gamma value for augmenting SVDs eigenvalues'
+    )
 
-    parser.add_argument('--base', type=str, default='/home/rldata/hilbert-embeddings/embeddings',
-                        help='base directory containg any embeddings we will be testing')
+    # This should default based on hilbertrc
+    parser.add_argument(
+        '--base', type=str, 
+        default='/home/rldata/hilbert-embeddings/embeddings',
+        help='base directory containg any embeddings we will be testing'
+    )
+
+    # This should defuault based on hilbert-rc
     parser.add_argument(
         '--data_path', type=str, default=KIAN_PATH, 
         help='Path to evaluation datasets.'
@@ -348,10 +384,12 @@ def main():
     # do an arg check
     if 'glv' in args.sample[0] and not args.glove_avg:
         args.glove_avg = True
-        print('\n\n-----------WARNING----------')
-        print('You are NOT averaging vectors and covectors, but you ARE using Glove!')
-        print('You should probably be passing the -G argument in this case!\n\n')
-        print('DEFAULT BEHAVIOR is to AVERAGE THEM ANYWAY!')
+        print(
+            '\n\n-----------WARNING----------\n'
+            'You are NOT averaging vectors and covectors, but you ARE using '
+            'Glove!\nYou should probably be passing the -G argument in this '
+            'case!\n\nDEFAULT BEHAVIOR is to AVERAGE THEM ANYWAY!\n\n'
+        )
 
     # check if we want to do SVD
     if args.svd:
@@ -376,8 +414,10 @@ def main():
     # get the last files of the iters in each of the targets
     final_files = {}
     for d in args.sample:
-        files = get_all_iters(
-            '{}/{}'.format(args.base, d)) if iter_files is None else iter_files
+        files = (
+            get_all_iters('{}/{}'.format(args.base, d))
+            if iter_files is None else iter_files
+        )
         final_files[d] = files[-1][0] # just the file name, not epoch
 
     # may need to do the experiments on them
@@ -389,13 +429,15 @@ def main():
         targpath = '{}/{}'.format(args.base, args.compareto)
         target_results = eval_fun(targpath, eval_arg)
 
-    # here we need to apply the evaluation function to each iteration in the sample directory
+    # here we need to apply the evaluation function to each iteration in the
+    # sample directory
     if args.eval:
         eval_fun = lambda p, ds: evaluate_embs(p, ds, avg_vw=args.glove_avg)
 
     # get all results for eat iteration
     if iter_files:
-        final_results = run_iteration_testing(iter_files, eval_fun, eval_arg, target_results, args)
+        final_results = run_iteration_testing(
+            iter_files, eval_fun, eval_arg, target_results, args)
     else:
         final_results = {}
         for model, path in final_files.items():
@@ -403,7 +445,8 @@ def main():
 
     # this plots and compares final results
     if args.viz or args.save:
-        save_path = '/'.join(iter_files[0][0].split('/')[:-1]) if args.save else ''
+        save_path = (
+            '/'.join(iter_files[0][0].split('/')[:-1]) if args.save else '')
         assert not args.save or (args.save and len(final_results) == 1)
         compare_finals(final_results, target_results, save_path)
 
