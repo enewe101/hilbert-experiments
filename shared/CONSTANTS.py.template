@@ -1,4 +1,5 @@
 from os import path
+import os
 
 MAIN_MEMORY_DEVICE = 'cpu'
 MATRIX_OPS_DEVICE = 'cuda'

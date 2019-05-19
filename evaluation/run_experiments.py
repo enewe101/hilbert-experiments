@@ -3,24 +3,63 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
+import time
+from collections import defaultdict
 from scipy.stats import spearmanr
 from progress.bar import IncrementalBar
-from dataset_load import HilbertDataset # required import to load numpy
+from sklearn.metrics import f1_score
+from evaluation.dataset_load import HilbertDataset # required import to load numpy
 from evaluation.train_classifier import train_classifier
 from evaluation.train_seq_labeller import train_seq_labeller
-from evaluation.torch_model import LogisticRegression, FFNN, SeqLabLSTM, BiLSTMClassifier
-from evaluation.constants import *
+from evaluation.torch_model import SeqLabLSTM
+from evaluation.factories import get_classifier_constr_kwargs
 from evaluation.results import ResultsHolder
 from evaluation.hparams import HParams
+from evaluation.constants import *
+
+
+def flatten(double_l):
+    return [item for l in double_l for item in l]
+
+
+## helper for seq labelling
+def run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels):
+    # this baseline model predicts the most frequent tag as the correct one for each word
+    counts = defaultdict(lambda: defaultdict(lambda: 0))
+    most_most_freq = defaultdict(lambda: 0)
+    assert len(tr_x) == len(tr_y)
+    for words, labels in zip(tr_x, tr_y):
+        assert len(words) == len(labels) and len(words) > 0
+        for w, l in zip(words, labels):
+            counts[w][l] += 1
+            most_most_freq[l] += 1
+    most_most_freq = max(most_most_freq, key=most_most_freq.get)
+
+    most_freq = defaultdict(lambda: most_most_freq)
+    most_freq.update({w: max(counts[w], key=counts[w].get) for w in counts})
+    seq_preds = []
+    for words in te_x:
+        seq_preds.append([most_freq[w] for w in words])
+    
+    correct, total = 0, 0
+    for preds, golds in zip(seq_preds, te_y):
+        assert len(preds) == len(golds) and len(preds) > 0
+        correct += sum(p == g for p, g in zip(preds,golds))
+        total += len(preds)
+    f1 = f1_score(flatten(te_y), flatten(seq_preds), labels=sst_labels, average='micro')
+    print('Most frequent tag baseline: {:0.4f} accuracy'.format(correct / total))
+    print('                            {:0.4f} f1 score'.format(f1))
 
 
 # to help with dealing with averaging vectors and covectors
 class EmbWrapper(object):
-    def __init__(self, hembs, avg_vw=False):
+    def __init__(self, hembs, avg_vw=False, normalize=False, standardize=False):
         self.dictionary = hembs.dictionary
         self.matrix = hembs.V
+        self.covecs = hembs.W
         self.dim = len(self.matrix[0])
         self.unk = hembs.unk
+        self.augment_embeddings(normalize, standardize)
         if avg_vw:
             if hembs.W is not None:
                 self.matrix += hembs.W
@@ -28,13 +67,46 @@ class EmbWrapper(object):
             else:
                 print('(weak warning) no covectors found!')
 
+    def augment_embeddings(self, normalize, standardize):
+        """
+        Normalize rows and/or standardize columns (with centering).
+        We always standardize first, assuming that one would rather have
+        unit norm embeddings than very small embeddings (if doing both).
+        """
+        if standardize:
+            print('Standardizing...')
+            mmean = torch.mean(self.matrix, dim=0)
+            mnorm = self.matrix.norm(dim=0)
+
+            self.matrix -= mmean
+            self.matrix /= mnorm
+            self.covecs -= torch.mean(self.covecs, dim=0)
+            self.covecs /= self.covecs.norm(dim=0)
+
+            # get the stuff from the matrix to deal with unk
+            self.unk -= mmean
+            self.unk /= mnorm
+
+        if normalize:
+            print('Normalizing...')
+            self.matrix = (self.matrix.t() / self.matrix.norm(dim=1)).t()
+            self.covecs = (self.covecs.t() / self.covecs.norm(dim=1)).t()
+            self.unk /= self.unk.norm()
+
     def get_id(self, w):
         return self.dictionary.get_id(w)
 
-    def get_emb(self, w):
+    def get_vec(self, w):
         try:
             idx = self.dictionary.get_id(w)
             return self.matrix[idx]
+        except KeyError:
+            return self.unk
+
+    def get_covec(self, w):
+        try:
+            idx = self.dictionary.get_id(w)
+            return self.covecs[idx]
         except KeyError:
             return self.unk
 
@@ -48,11 +120,11 @@ class EmbWrapper(object):
         return any(np.isnan(self.matrix[0]))
 
 
-
+# WARNING: using normal dot prdouct!!
 # little helper
 def cossim(v1, v2):
     dot = v1.dot(v2)
-    return dot / (v1.norm() * v2.norm())
+    return dot #/ (v1.norm() * v2.norm())
 
 
 # Beginning of our experimental code.
@@ -84,8 +156,9 @@ def similarity_exp(embs, hdataset, hparams, verbose=True):
             had_coverage.append(embs.has_w(w1) and embs.has_w(w2))
             gold.append(gold_score)
 
-            e1 = embs.get_emb(w1)
-            e2 = embs.get_emb(w2)
+            e1 = embs.get_vec(w1)
+            e2 = embs.get_vec(w2)
+
             similarities.append(cossim(e1, e2).item())
 
         covered = [(p, g) for i, (p, g) in enumerate(zip(similarities,gold)) if had_coverage[i]]
@@ -133,9 +206,9 @@ def analogy_exp(embs, hdataset, hparams):
                 missing_answer += 1
                 continue
 
-            e1 = embs.get_emb(w1).reshape(-1, 1)
-            e2 = embs.get_emb(w2).reshape(-1, 1)
-            e3 = embs.get_emb(w3).reshape(-1, 1)
+            e1 = embs.get_vec(w1).reshape(-1, 1)
+            e2 = embs.get_vec(w2).reshape(-1, 1)
+            e3 = embs.get_vec(w3).reshape(-1, 1)
 
             # get cos sims for each of them with the dataset
             sim_all = embs.matrix.mm(torch.cat([e1, e2, e3], dim=1))
@@ -187,6 +260,7 @@ def analogy_exp(embs, hdataset, hparams):
 
 # TODO: add CRF on top of the LSTM predictions.
 # TODO: improve documentation.
+# TODO: update sequence labelling to correspond to new HParams and factory patterns.
 
 def seq_labelling_exp(embs, hdataset, hparams):
     """
@@ -198,11 +272,23 @@ def seq_labelling_exp(embs, hdataset, hparams):
     :param hparams: HParams
     :return: ResultsHolder
     """
-   
+
     # get the training data
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=True)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=True)
 
+    # deal with supersense-specific label evaluation (still have 0 label for output layer though!)
+    sst_labels = None
+    if 'sst' in hdataset.name:
+        sst_labels = set(hdataset.labels_to_idx.values())
+        sst_labels.remove(hdataset.ignore_idx)
+        assert hdataset.ignore_idx > 0
+        sst_labels = sorted(list(sst_labels))
+ 
+    # run the baseline algorithm, comment/uncomment design pattern right now lol
+    # baseline_results = run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels)
+    # exit(0)
+   
     # x is list of sentences, sentence is list of tokens
     # y is list of pos-tag lists for each token
     neural_constructor = SeqLabLSTM
@@ -212,11 +298,11 @@ def seq_labelling_exp(embs, hdataset, hparams):
                      'dropout': hparams.dropout,
                      'fine_tune': hparams.fine_tune}
 
-    results = train_seq_labeller(hdataset.name,
-                                 embs,
-                                 neural_constructor,
-                                 neural_kwargs,
-                                 lr=hparams.lr,
+    results = train_seq_labeller(exp_name=hdataset.name,
+                                 h_embs=embs,
+                                 constr=neural_constructor,
+                                 kw_params=neural_kwargs,
+                                 opt_str=hparams.opt_str,
                                  n_epochs=hparams.epochs,
                                  mb_size=hparams.mb_size,
                                  early_stop=10,
@@ -225,8 +311,8 @@ def seq_labelling_exp(embs, hdataset, hparams):
                                  te_x=te_x,
                                  te_y=te_y,
                                  normalize_gradient=hparams.normalize_gradient,
-                                 schedule_lr=hparams.schedule_lr,
-                                 verbose=True,)
+                                 sst_labels=sst_labels,
+                                 verbose=True)
     return results
 
 
@@ -242,38 +328,16 @@ def classification_exp(embs, hdataset, hparams):
     tr_x, tr_y = hdataset.get_x_y('train', embs.dictionary, as_indicies=True, translate_label_by_one=False)
     te_x, te_y = hdataset.get_x_y('test', embs.dictionary, as_indicies=True, translate_label_by_one=False)
 
-    # set the neural constructor
-    if hparams.model_str.lower() == 'ffnn':
-        neural_constructor = FFNN
-    elif hparams.model_str.lower() == 'logreg':
-        neural_constructor = LogisticRegression
-    elif hparams.model_str.lower() == 'bilstm':
-        neural_constructor = BiLSTMClassifier
-    else:
-        raise NotImplementedError('Constructor model \"{}\" not '
-                                  'implemented!'.format(hparams.model_str))
-
-    neural_kwargs = {'n_classes': len(hdataset.labels_to_idx),
-                     'fine_tune': hparams.fine_tune}
-
-    # special parameters for a FFNN
-    if hparams.model_str.lower() == 'ffnn':
-        neural_kwargs.update({'hdim1': hparams.hdim1,
-                              'hdim2': hparams.hdim2,
-                              'dropout': hparams.dropout})
-
-    elif hparams.model_str.lower() == 'bilstm':
-        neural_kwargs.update({'rnn_hdim': hparams.rnn_hdim,
-                              'n_layers': hparams.n_layers,
-                              'dropout': hparams.dropout})
+    # get the constructor and kwargs corresponding to the hparams from the factory
+    constr, kwargs = get_classifier_constr_kwargs(hparams, len(hdataset.labels_to_idx))
 
     # run the model!
     exp_name = '{}_{}'.format(hdataset.name, hparams.model_str.lower())
-    results = train_classifier(exp_name,
-                               embs,
-                               neural_constructor,
-                               neural_kwargs,
-                               lr=hparams.lr,
+    results = train_classifier(exp_name=exp_name,
+                               h_embs=embs,
+                               classifier_constr=constr,
+                               kw_params=kwargs,
+                               opt_str=hparams.opt_str,
                                n_epochs=hparams.epochs,
                                mb_size=hparams.mb_size,
                                early_stop=10,
@@ -281,18 +345,17 @@ def classification_exp(embs, hdataset, hparams):
                                tr_y=tr_y,
                                te_x=te_x,
                                te_y=te_y,
-                               schedule_lr=hparams.schedule_lr,
-                               verbose=True,)
+                               verbose=True)
     return results
 
 
 #### utility functions ###
-def load_embeddings(path, device=None, avg_vw=False):
+def load_embeddings(path, device=None, avg_vw=False, normalize=False, standardize=False):
     e = hilbert.embeddings.Embeddings.load(path,
             device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
         e.V = e.V.transpose(0, 1)
-    return EmbWrapper(e, avg_vw)
+    return EmbWrapper(e, avg_vw, normalize, standardize)
 
 
 def get_all_words(list_of_hdatasets):
@@ -307,11 +370,16 @@ def main():
 
     # load up the datasets and get the vocab we will need.
     print('Loading datasets...')
-    datasets = np.load('np/all_data.npz')['arr_0'][0]
+    datasets = np.load(hparams.data_path)['arr_0'][0]
 
     for emb_path in hparams.iter_emb_paths():
-        print(f'Loading embeddings from {emb_path}..')
-        emb = load_embeddings(emb_path, avg_vw=hparams.avgvw)
+        print('Loading embeddings from {}..'.format(emb_path))
+
+        emb = load_embeddings(emb_path,
+                              avg_vw=hparams.avgvw,
+                              normalize=hparams.normalize,
+                              standardize=hparams.standardize)
+
         if hparams.avgvw:
             print('-- averaging vectors and covectors --')
 
@@ -319,20 +387,29 @@ def main():
             SIMILARITY: similarity_exp,
             BROWN_POS: seq_labelling_exp,
             WSJ_POS: seq_labelling_exp,
+            SST: seq_labelling_exp,
             # CHUNKING: seq_labelling_exp,
             SENTIMENT: classification_exp,
             NEWS: classification_exp,
             ANALOGY: analogy_exp,
         }
 
+        model_str = ''
+        if hparams.experiment in (NEWS, SENTIMENT):
+            model_str = '_' + hparams.model_str
+
         for expname, exp in names_to_fun.items():
             if hparams.experiment != 'all' and expname != hparams.experiment:
                 continue
 
             # we may be running repeated experiments
-            mean_results = ResultsHolder(expname)
+            mean_results = ResultsHolder(expname + model_str)
             params_str = hparams.get_params_str()
             for i in range(hparams.repeat):
+                
+                # flush the GPU and wait a second to reset everything
+                torch.cuda.empty_cache()
+                time.sleep(1)
 
                 # set the seed right before running experiment
                 hparams.seed += (i * 1917)
@@ -349,7 +426,8 @@ def main():
                     mean_results = results
                 else:
                     got_res = {**results.results_by_dataset['full']}
-                    mean_results.add_ds_results(f'seed {hparams.seed}', got_res)
+                    mean_results.add_ds_results(
+                        'seed {}'.format(hparams.seed), got_res)
 
             mean_results.serialize(emb_path, params_str)
 

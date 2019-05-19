@@ -1,4 +1,5 @@
 import nltk
+import os
 import numpy as np
 import argparse
 from collections import defaultdict
@@ -7,8 +8,8 @@ from nltk.corpus import brown, conll2000, ptb
 from os import listdir
 from evaluation.constants import *
 
-UNSUP_DIR = 'unsup_datasets/'
-SUP_DIR = 'sup_datasets/'
+UNSUP_DIR = 'additional/unsup_datasets/'
+SUP_DIR = 'additional/sup_datasets/'
 
 # filter helper function
 def filter_words(tok_list, filter_stops):
@@ -32,6 +33,7 @@ class HilbertDataset(object):
         self._test = []
         self._all = {}
         self.labels_to_idx = {}
+        self.ignore_idx = -1000 # for SST, needs to correspond to the 0 label
 
 
     def add_full(self, data_list, ds_name=''):
@@ -131,6 +133,8 @@ class HilbertDataset(object):
         # set our label-to-idx storage if it has not been set before
         if set_indices:
             self.labels_to_idx = {l: i + label_translate for i, l in enumerate(unique_labs)}
+            if 'sst' in self.name:
+                self.ignore_idx = self.labels_to_idx['0']
 
         # return a list of indicies of labels, rather than the string labels themselves
         if as_indicies:
@@ -151,7 +155,8 @@ class HilbertDataset(object):
 
                 # set the y labels
                 if type(yval) == list:
-                    labs_idx.append([self.labels_to_idx[lab] for lab in yval])
+                    # put a blank if the label wasn't in training (this only happens once, for I.noun.Tops, which occurs once)
+                    labs_idx.append([self.labels_to_idx[lab] if lab in self.labels_to_idx else self.ignore_idx for lab in yval])
                     assert all(idx >= label_translate for idx in labs_idx[-1])  # all labels MUST start at 1 (padding is 0)
                 else:
                     labs_idx.append(self.labels_to_idx[yval])
@@ -191,9 +196,10 @@ class HilbertDataset(object):
         vocab = defaultdict(lambda: 0)
         if self.is_unsupervised:
             for ds, samples in self.items():
-                for sample in samples:
-                    if type(sample) == str:
-                        vocab[sample] += 1
+                for s_tuple in samples:
+                    for item in s_tuple:
+                        if type(item) == str:
+                            vocab[item] += 1
         else:
             for ds in ('train', 'test'):
                 x, y = self.get_x_y(ds)
@@ -217,7 +223,7 @@ def load_similarity():
         that is, word1 was voted to be "score" similar to word2
     """
     datasets = HilbertDataset('similarity', True) 
-    for fname in filter(lambda x: 'analog' not in x.lower(), listdir(UNSUP_DIR)):
+    for fname in filter(lambda x: x.endswith('.csv') and 'analog' not in x.lower(), listdir(UNSUP_DIR)):
         with open('{}{}'.format(UNSUP_DIR, fname), 'r') as f:
             ds = []
             for line in f.readlines()[1:]: # skip header
@@ -274,6 +280,25 @@ def load_wsj_pos_tagging():
     return dataset
 
 
+def load_semcor_sst_tagging():
+    """
+    Returns a full list representing the Semcor3.0 supersense datset.
+        Each item is a sentence built of (word, tag) tuples.
+    """
+    dataset = HilbertDataset('semcor-sst', is_unsupervised=False)
+    path = os.path.join(SUP_DIR, 'semcor-sst.txt')
+    sents_tags = []
+    with open(path, 'r') as f:
+        for line in f:
+            sent = []
+            for pair in line.split('\t'):
+                word, tag = pair.split(' ')
+                sent.append((word.lower(), tag.rstrip('\n'),))
+            sents_tags.append(sent)
+    dataset.add_full(sents_tags)
+    return dataset
+
+
 def load_chunking():
     """
     Returns a dictionary for the train and test sets.
@@ -327,7 +352,8 @@ def load_all():
         load_analogies(),
         load_brown_pos_tagging(),
         load_wsj_pos_tagging(),
-        load_chunking(),
+        load_semcor_sst_tagging(),
+        #load_chunking(),
         load_sentiment(),
         load_news_classification(),
     ]
@@ -346,18 +372,58 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='build datasets for hilbert.')
     parser.add_argument('--testing', action='store_true',
                         help='run tests over the datasets')
+    parser.add_argument('--vocab', action='store_true',
+                        help='extract the vocab across all of the datasets')
+    parser.add_argument('--ds', default='train', 
+                        help='which subset (train or test) to get statistics')
     args = parser.parse_args()
 
-    if not args.testing:
+    if not args.vocab and not args.testing:
         # save it all up
         all_data = load_all()
-        np.savez_compressed('np/all_data.npz', np.array([all_data]))
+        np.savez_compressed('additional/np/all_data.npz', np.array([all_data]))
+
+    if args.vocab:
+        vocab = set()
+        for name, ds in all_data.items():
+            dsv = ds.get_unique_words_counts()
+            print(name, len(dsv.keys()))
+            vocab = vocab.union(set(dsv.keys()))
+        
+        with open('ALL_VOCAB.txt', 'w') as f:
+            for v in vocab:
+                f.write('{}\n'.format(v))
+
 
     def test():
 
         class TestDictionary(object):
             def get_id(self, t):
                 return 0
+        dsname = args.ds
+
+        # semcor ds tests
+        print('Semcor SST tagging')
+        pos = load_semcor_sst_tagging()
+        pos.split_train_test()
+        x, y = pos.get_x_y(dsname)
+        print(x[0:2])
+        print(y[0:2])
+        pos.get_stats(dsname)
+        # testing labelling
+        x, y = pos.get_x_y(dsname, ds_dict=TestDictionary(),
+                           as_indicies=True,
+                           translate_label_by_one=True)
+        uniques = set()
+        for label_list in y:
+            for label in label_list:
+                uniques.add(label)
+        for label_list in y:
+            for label in label_list:
+                assert 0 < label <= len(uniques)
+        print('LABEL IDX FOR 0:', pos.labels_to_idx['0'])
+        assert(pos.labels_to_idx['0'] == pos.ignore_idx)
+        print()
 
 
         # similarity ds tests
@@ -371,7 +437,6 @@ if __name__ == '__main__':
                 assert type(s[2] == float)
             print('\tExample: {}'.format(sample_list[15]))
         print('Similarity tests passed.\n')
-        exit(0)
 
         # analogytests
         analogy_ds = load_analogies()
@@ -388,12 +453,12 @@ if __name__ == '__main__':
         print('Brown Pos tagging')
         pos = load_brown_pos_tagging()
         pos.split_train_test()
-        x, y = pos.get_x_y('train')
+        x, y = pos.get_x_y(dsname)
         print(x[0:2])
         print(y[0:2])
-        pos.get_stats('train')
+        pos.get_stats(dsname)
         # testing labelling
-        x, y = pos.get_x_y('train', ds_dict=TestDictionary(),
+        x, y = pos.get_x_y(dsname, ds_dict=TestDictionary(),
                            as_indicies=True,
                            translate_label_by_one=True)
         uniques = set()
@@ -405,14 +470,15 @@ if __name__ == '__main__':
                 assert 0 < label <= len(uniques)
         print()
 
+                
         print('WSJ Pos tagging')
         pos = load_wsj_pos_tagging()
-        x, y = pos.get_x_y('train')
+        x, y = pos.get_x_y(dsname)
         print(x[0:2])
         print(y[0:2])
-        pos.get_stats('train')
+        pos.get_stats(dsname)
         # testing labelling
-        x, y = pos.get_x_y('train', ds_dict=TestDictionary(),
+        x, y = pos.get_x_y(dsname, ds_dict=TestDictionary(),
                            as_indicies=True,
                            translate_label_by_one=True)
         uniques = set()
@@ -424,6 +490,7 @@ if __name__ == '__main__':
                 assert 0 < label <= len(uniques)
         print()
         
+
         # chunking
         # print('Chunking')
         # chunk = load_chunking()
@@ -436,13 +503,13 @@ if __name__ == '__main__':
         # sentiment
         print('Sentiment')
         sent = load_sentiment()
-        x, y = sent.get_x_y('train', filter_stopwords=True)
+        x, y = sent.get_x_y(dsname, filter_stopwords=True)
         print(x[0:2])
         print(y[0:2])
-        sent.get_stats('train')
+        sent.get_stats(dsname)
 
         # testing labelling
-        x, y = sent.get_x_y('train', ds_dict=TestDictionary(),
+        x, y = sent.get_x_y(dsname, ds_dict=TestDictionary(),
                             as_indicies=True,
                             translate_label_by_one=False)
         uniques = set(y)
@@ -455,13 +522,13 @@ if __name__ == '__main__':
         print('News')
         news = load_news_classification()
         news.split_train_test()
-        x, y = news.get_x_y('train', filter_stopwords=True)
+        x, y = news.get_x_y(dsname, filter_stopwords=True)
         print(x[0:2])
         print(y[0:2])
-        news.get_stats('train')
+        news.get_stats(dsname)
 
         # testing labelling
-        x, y = sent.get_x_y('train', ds_dict=TestDictionary(),
+        x, y = sent.get_x_y(dsname, ds_dict=TestDictionary(),
                             as_indicies=True,
                             translate_label_by_one=False)
         uniques = set(y)

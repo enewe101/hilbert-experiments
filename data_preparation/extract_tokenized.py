@@ -3,7 +3,10 @@ import re
 import sys
 import codecs
 
-import corenlpy
+try:
+    import corenlpy
+except ImportError:
+    corenlpy = None
 
 import shared
 import data_preparation as dp

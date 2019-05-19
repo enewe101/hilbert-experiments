@@ -73,7 +73,7 @@ def get_png_idx(prefix):
 def save_figure(fig, prefix):
     assert '_' not in prefix
     png_idx = get_png_idx(prefix)
-    fig.savefig(f'png/{prefix}_{png_idx}', bbox_inches='tight')
+    fig.savefig(f'png/{prefix}_{png_idx}.png', bbox_inches='tight')
     print(f'Plotted png/{prefix}_{png_idx}...')
     plt.clf()
 ### /end ###
