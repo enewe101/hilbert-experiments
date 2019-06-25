@@ -53,19 +53,28 @@ def run_mft_baseline(tr_x, tr_y, te_x, te_y, sst_labels):
 
 # to help with dealing with averaging vectors and covectors
 class EmbWrapper(object):
-    def __init__(self, hembs, avg_vw=False, normalize=False, standardize=False):
+    def __init__(self, hembs, covec_opt=None, normalize=False, standardize=False):
         self.dictionary = hembs.dictionary
         self.matrix = hembs.V
         self.covecs = hembs.W
-        self.dim = len(self.matrix[0])
         self.unk = hembs.unk
         self.augment_embeddings(normalize, standardize)
-        if avg_vw:
+
+        if covec_opt == 'avg':
             if hembs.W is not None:
                 self.matrix += hembs.W
                 self.matrix /= 2.
             else:
                 print('(weak warning) no covectors found!')
+
+        elif covec_opt == 'concat':
+            self.matrix = torch.cat((hembs.V, hembs.W), dim=1)
+            self.unk = torch.cat((self.unk, self.unk))
+
+        self.dim = len(self.matrix[0])
+        print('emb-dim: ', self.dim)
+
+
 
     def augment_embeddings(self, normalize, standardize):
         """
@@ -124,7 +133,7 @@ class EmbWrapper(object):
 # little helper
 def cossim(v1, v2):
     dot = v1.dot(v2)
-    return dot #/ (v1.norm() * v2.norm())
+    return dot / (v1.norm() * v2.norm())
 
 
 # Beginning of our experimental code.
@@ -350,12 +359,12 @@ def classification_exp(embs, hdataset, hparams):
 
 
 #### utility functions ###
-def load_embeddings(path, device=None, avg_vw=False, normalize=False, standardize=False):
+def load_embeddings(path, device=None, covec_opt='none', normalize=False, standardize=False):
     e = hilbert.embeddings.Embeddings.load(path,
             device=HParams.DEVICE.type if device is None else device)
     if len(e.V) == EMB_DIM:
         e.V = e.V.transpose(0, 1)
-    return EmbWrapper(e, avg_vw, normalize, standardize)
+    return EmbWrapper(e, covec_opt, normalize, standardize)
 
 
 def get_all_words(list_of_hdatasets):
@@ -376,11 +385,11 @@ def main():
         print('Loading embeddings from {}..'.format(emb_path))
 
         emb = load_embeddings(emb_path,
-                              avg_vw=hparams.avgvw,
+                              covec_opt=hparams.covec_opt,
                               normalize=hparams.normalize,
                               standardize=hparams.standardize)
 
-        if hparams.avgvw:
+        if hparams.covec_opt == 'avg':
             print('-- averaging vectors and covectors --')
 
         names_to_fun = {

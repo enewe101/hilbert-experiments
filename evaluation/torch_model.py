@@ -10,49 +10,33 @@ class BasicPooling(tmb.EmbeddingModel):
 
     def __init__(self, h_embs, n_classes,
                  pooling='max',
-                 usecovecs=True,
                  dropout=0.,
                  ffnn=True,
                  **kwargs):
 
-        super(BasicPooling, self).__init__(h_embs, store_covecs=usecovecs,
+        super(BasicPooling, self).__init__(h_embs, store_covecs=False,
                                            zero_padding=True, **kwargs)
-        self.covecs = usecovecs
+        self.covecs = False
         self.do_mean = pooling == 'mean'
         self.dropout = nn.Dropout(p=dropout)
-
-        in_feats = 2 * self.emb_dim if self.covecs else self.emb_dim
-        self.classifier = tmb.MLPClassifier(in_feats, n_classes,
+        self.classifier = tmb.MLPClassifier(self.emb_dim, n_classes,
                                             dropout=dropout, nonlinear=ffnn)
 
 
     def forward(self, token_seqs, pads=None):
         assert (pads is not None)
-        vec_embs, covec_embs = super(BasicPooling, self).forward(
-            token_seqs, get_covecs=self.covecs
-        ) # shape is B x L x d
-        B, L, d = vec_embs.shape
-        vec_embs = self.dropout(vec_embs)
-        covec_embs = self.dropout(covec_embs) if self.covecs else None
+        embs, _ = super(BasicPooling, self).forward(token_seqs) # shape is B x L x d
+        B, L, d = embs.shape
+        embs = self.dropout(embs)
 
         if self.do_mean:
-            vec_embs = torch.sum(vec_embs, dim=1)
-            vec_embs = (vec_embs.t() / (L - pads.float())).t()
-            if self.covecs:
-                covec_embs = torch.sum(covec_embs, dim=1)
-                covec_embs = (covec_embs.t() / (L - pads.float())).t()
+            embs = torch.sum(embs, dim=1)
+            embs = (embs.t() / (L - pads.float())).t()
 
         else: # do max
-            vec_embs = torch.max(vec_embs, dim=1)[0]
-            if self.covecs:
-                covec_embs = torch.max(covec_embs, dim=1)[0]
+            embs = torch.max(embs, dim=1)[0]
 
-        # concatenate etc
-        X = torch.cat((vec_embs, covec_embs), dim=1) if self. covecs else vec_embs
-
-        assert (X.shape[0] == B)
-
-        y = self.classifier(X)
+        y = self.classifier(embs)
         return F.log_softmax(y, dim=1).squeeze()
 
 

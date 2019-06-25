@@ -36,9 +36,14 @@ class HParams(object):
 
         ## Generic run parameters
         parser.add_argument(
-            '--avgvw', action='store_true',
-            help='flag to average vecs and covecs (like GloVe does!)'
+            '--covec_opt', type=str, default='none',
+            choices=['none', 'avg', 'concat'],
+            help='set the option for using covectors'
         )
+        #parser.add_argument(
+        #    '--avgvw', action='store_true',
+        #    help='flag to average vecs and covecs (like GloVe does!)'
+        #)
         parser.add_argument(
             '--seed', type=int, default=1, help='set the random seed'
         )

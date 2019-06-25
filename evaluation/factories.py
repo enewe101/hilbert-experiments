@@ -62,13 +62,11 @@ def get_classifier_constr_kwargs(hparams, nclasses):
 
     if mstr == 'pool-max':
         neural_constructor = tm.BasicPooling
-        neural_kwargs.update({'pooling': 'max',
-                              'usecovecs': not hparams.nocovecs})
+        neural_kwargs.update({'pooling': 'max'})
 
     elif mstr == 'pool-mean':
         neural_constructor = tm.BasicPooling
-        neural_kwargs.update({'pooling': 'mean',
-                              'usecovecs': not hparams.nocovecs})
+        neural_kwargs.update({'pooling': 'mean'})
 
     elif mstr == 'bilstm':
         neural_constructor = tm.BiLSTMClassifier
