@@ -108,7 +108,7 @@ def get_classifier_constr_kwargs(hparams, nclasses):
 
     elif mstr == 'rec-hilb':
         neural_constructor = tm.RecurrentHilbert
-        neural_kwargs.update({'seq_pooling': 'last',
+        neural_kwargs.update({'seq_pooling': 'max',
                               'normalize': True})
 
     else:

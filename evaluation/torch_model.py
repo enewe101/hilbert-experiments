@@ -62,8 +62,8 @@ class RecurrentHilbert(tmb.EmbeddingModel):
                                             dropout=dropout, nonlinear=ffnn)
 
 
-     def forward(self, token_seqs, pads=None):
-        vec_seqs, covec_seqs = super(BasicAttention, self).forward(
+    def forward(self, token_seqs, pads=None):
+        vec_seqs, covec_seqs = super(RecurrentHilbert, self).forward(
             token_seqs, get_covecs=True)
         assert (vec_seqs.shape == covec_seqs.shape)
         assert (pads is not None)
@@ -84,8 +84,8 @@ class RecurrentHilbert(tmb.EmbeddingModel):
             vi = vec_seqs[:, i, :]
             wi = covec_seqs[:, i, :]
             
-            vi_dot = torch.sum(vi * w_f, dim=1)
-            wi_dot = torch.sum(wi * v_f, dim=1)
+            vi_dot = torch.sum(vi * w_f, dim=1).reshape(-1, 1)
+            wi_dot = torch.sum(wi * v_f, dim=1).reshape(-1, 1)
             
             v_f = v_f + (vi_dot * vi)
             w_f = w_f + (wi_dot * wi)
@@ -93,7 +93,7 @@ class RecurrentHilbert(tmb.EmbeddingModel):
             if self.normalize:
                 v_f = (v_f.t() / torch.norm(v_f, dim=1)).t()
                 w_f = (w_f.t() / torch.norm(w_f, dim=1)).t()
-        
+            
         # finished creating the sequence representation!
         if self.pooling == 'last':
             X = torch.cat((v_f, w_f), dim=1)

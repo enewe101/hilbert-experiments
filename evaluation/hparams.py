@@ -74,7 +74,7 @@ class HParams(object):
         parser.add_argument(
             '--model_str', type=str, choices=['pool-mean', 'pool-max', 'bilstm', 'bilstm-max',
                                               'att-basic', 'att-linear', 'att-diag',
-                                              'att-neural'],
+                                              'att-neural', 'rec-hilb'],
             help='model string for when model selection is applicable; e.g., classification'
         )
         parser.add_argument(
