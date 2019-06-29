@@ -76,8 +76,12 @@ class RecurrentHilbert(tmb.EmbeddingModel):
         covec_seqs = self.dropout(covec_seqs)
 
         # now we will make the initial states, todo is backward direction w/ pads
-        v_f = vec_seqs[:, 0, :] 
-        w_f = covec_seqs[:, 0, :]
+        v_f = torch.clone(vec_seqs[:, 0, :])
+        w_f = torch.clone(covec_seqs[:, 0, :])
+        
+        if self.pooling == 'max':
+            v_max = torch.clone(v_f)
+            w_max = torch.clone(w_f)
 
         # iterating over the sequence
         for i in range(1, max_len):
@@ -93,10 +97,17 @@ class RecurrentHilbert(tmb.EmbeddingModel):
             if self.normalize:
                 v_f = (v_f.t() / torch.norm(v_f, dim=1)).t()
                 w_f = (w_f.t() / torch.norm(w_f, dim=1)).t()
-            
+
+            if self.pooling == 'max':
+                v_max = torch.max(v_max, v_f)
+                w_max = torch.max(w_max, w_f)
+        
         # finished creating the sequence representation!
         if self.pooling == 'last':
             X = torch.cat((v_f, w_f), dim=1)
+
+        elif self.pooling == 'max':
+            X = torch.cat((v_max, w_max), dim=1)
 
         y = self.classifier(X)
         return F.log_softmax(y, dim=1).squeeze()
