@@ -106,6 +106,11 @@ def get_classifier_constr_kwargs(hparams, nclasses):
                               'act': hparams.act_str,
                               'usecovecs': not hparams.nocovecs})
 
+    elif mstr == 'rec-hilb':
+        neural_constructor = tm.RecurrentHilbert
+        neural_kwargs.update({'seq_pooling': 'last',
+                              'normalize': True})
+
     else:
         raise NotImplementedError('Constructor model \"{}\" not '
                                   'implemented!'.format(mstr))

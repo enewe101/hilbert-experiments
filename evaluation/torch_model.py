@@ -41,6 +41,69 @@ class BasicPooling(tmb.EmbeddingModel):
 
 
 
+# very simple way to do sequence contextualization deterministically
+class RecurrentHilbert(tmb.EmbeddingModel):
+    
+    def __init__(self, h_embs, n_classes,
+                 seq_pooling='last',
+                 normalize=True,
+                 dropout=0.,
+                 ffnn=True,
+                 **kwargs):
+        
+        super(RecurrentHilbert, self).__init__(h_embs,
+              zero_padding=True, store_covecs=True, **kwargs)
+        
+        self.pooling = seq_pooling
+        self.n_classes = n_classes
+        self.normalize = normalize
+        self.dropout = nn.Dropout(p=dropout)
+        self.classifier = tmb.MLPClassifier(2 * self.emb_dim, n_classes,
+                                            dropout=dropout, nonlinear=ffnn)
+
+
+     def forward(self, token_seqs, pads=None):
+        vec_seqs, covec_seqs = super(BasicAttention, self).forward(
+            token_seqs, get_covecs=True)
+        assert (vec_seqs.shape == covec_seqs.shape)
+        assert (pads is not None)
+
+        # note: seqs -> (batch_size, max_seq_len, embedding_dim)
+        bsz, max_len, emb_dim = vec_seqs.shape
+        
+        # dropout in beginning
+        vec_seqs = self.dropout(vec_seqs)
+        covec_seqs = self.dropout(covec_seqs)
+
+        # now we will make the initial states, todo is backward direction w/ pads
+        v_f = vec_seqs[:, 0, :] 
+        w_f = covec_seqs[:, 0, :]
+
+        # iterating over the sequence
+        for i in range(1, max_len):
+            vi = vec_seqs[:, i, :]
+            wi = covec_seqs[:, i, :]
+            
+            vi_dot = torch.sum(vi * w_f, dim=1)
+            wi_dot = torch.sum(wi * v_f, dim=1)
+            
+            v_f = v_f + (vi_dot * vi)
+            w_f = w_f + (wi_dot * wi)
+
+            if self.normalize:
+                v_f = (v_f.t() / torch.norm(v_f, dim=1)).t()
+                w_f = (w_f.t() / torch.norm(w_f, dim=1)).t()
+        
+        # finished creating the sequence representation!
+        if self.pooling == 'last':
+            X = torch.cat((v_f, w_f), dim=1)
+
+        y = self.classifier(X)
+        return F.log_softmax(y, dim=1).squeeze()
+
+
+
+
 # Sequences transformer network with attention, for classification.
 class BasicAttention(tmb.EmbeddingModel):
 
