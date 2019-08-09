@@ -12,16 +12,17 @@ MIN_COUNT = 17921 # For gigaword this provides a vocab of 10001
 
 def make_glove_embeddings(
     out_dir,
+    corpus,
     min_count=5,
     dimension=300,
     iterations=15,
     window=5,
     threads=8,
     X_max=100,
+    alpha=0.75,
     save_mode=0,
     stats_path=None,
 ):
-    corpus = shared.CONSTANTS.TOKENIZED_CAT_FULL_PATH
     command = [
         ec.CONSTANTS.LOCAL_GLOVE_EXECUTABLE_PATH,
         corpus,
@@ -33,6 +34,7 @@ def make_glove_embeddings(
         str(window),
         str(threads),
         str(X_max),
+        str(alpha),
         str(save_mode),
         str(stats_path)
     ]
@@ -52,6 +54,10 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Run GloVe")
     parser.add_argument(
+        '--corpus', '-c', type=str, required=True,
+        help='Corpus file, relative to corpus dir.'
+    )
+    parser.add_argument(
         '--out-dir', '-o', type=str, required=True,
         help='Directory at which to save embeddings'
     )
@@ -69,6 +75,9 @@ if __name__ == '__main__':
         '--X-max', '-x', type=float, default=100., help="X_max hyperparameter"
     )
     parser.add_argument(
+        '--alpha', '-a', type=float, default=0.75, help="alpha hyperparameter"
+    )
+    parser.add_argument(
         '--dimension', '-d', type=int, default=300., 
         help="Vector dimensionality"
     )
@@ -80,7 +89,6 @@ if __name__ == '__main__':
             "(no biases)."
         )
     )
-
     parser.add_argument(
         '--window', '-w', type=int, default=None,
         help='Cooccurrence window size'
@@ -98,9 +106,13 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     # Either stats path must be set, or window size must be set
-    if args['stats_path'] == '' and args[window] is None:
+    if args['stats_path'] == '' and args['window'] is None:
         raise ValueError(
             "Either stats path must be set, or window size must be set")
+
+    # outdir is relative to the embeddings directory
+    args['corpus'] = os.path.join(
+        shared.CONSTANTS.TOKENIZED_CAT_DIR, args['corpus'])
 
     # outdir is relative to the embeddings directory
     args['out_dir'] = os.path.join(

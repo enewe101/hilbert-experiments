@@ -40,6 +40,7 @@ setup(
 	package_data={'': ['README.md']},
 	install_requires=[
         #'corenlpy', 
-        'scipy', 'hilbert', 'nltk', 'sklearn-crfsuite', 'progress'
+        'scipy', 'hilbert', 'nltk', 'sklearn-crfsuite', 'progress', 'nltk'
+        'sklearn'
     ]
 )

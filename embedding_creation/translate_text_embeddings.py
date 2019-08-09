@@ -14,6 +14,8 @@ def translate_embeddings(
     out_path,
     dictionary_path=None,
     allow_mismatch=False,
+    allow_missed_embeddings=False,
+    allow_missed_tokens=False,
     has_bias=False,
     has_covectors=False
 ):
@@ -35,7 +37,11 @@ def translate_embeddings(
 
     if dictionary_path is not None:
         d = h.dictionary.Dictionary.load(dictionary_path)
-        embeddings.sort_by_tokens(d.tokens, allow_mismatch=allow_mismatch)
+        embeddings.sort_by_tokens(
+            d.tokens, allow_mismatch=allow_mismatch,
+            allow_missed_embeddings=allow_missed_embeddings,
+            allow_missed_tokens=allow_missed_tokens
+        )
 
     embeddings.save(out_path)
 
@@ -167,6 +173,20 @@ if __name__ == '__main__':
         '--allow-mismatch', '-a', action='store_true',
         help=( 
             "Allow provided dictionary to not match original dictionary.")
+    )
+    parser.add_argument(
+        '--allow-missed-embeddings', '-A', action='store_true',
+        help=( 
+            "Allow provided dictionary to contain tokens not in embedding "
+            "(no embeddings will be lost)."
+        )
+    )
+    parser.add_argument(
+        '--allow-missed-tokens', '-z', action='store_true',
+        help=( 
+            "Allow dictionary to not contain tokens for which we have "
+            "embeddings (those embeddings will be lost)."
+        )
     )
     parser.add_argument(
         '--has-bias', '-b', action='store_true',

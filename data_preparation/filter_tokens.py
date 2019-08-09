@@ -2,39 +2,55 @@ import os
 import sys
 import shared
 import hilbert as h
+import argparse
 
 
-
-def filter_tokens(in_path, out_path, dictionary):
-    with open(in_path) as in_file:
-        with open(out_path, 'w') as out_file:
+def filter_tokens(in_file, out_file, dictionary):
+    with open(in_file) as in_file:
+        with open(out_file, 'w') as out_file:
             for lineno, line in enumerate(in_file):
                 if lineno % 1000 == 0:
                     print('{lines} lines'.format(lines=lineno))
-                out_file.write(
-                    ' '.join([t for t in line.split() if t in dictionary])
-                    + '\n'
-                )
+                out_file.write(' '.join([
+                    t for t in line.split() 
+                    if t in dictionary and t != '<unk>'
+                ]) + '\n')
 
 
 if __name__ == '__main__':            
 
-    vocab_size = int(sys.argv[1])
-    in_path = shared.CONSTANTS.TOKENIZED_CAT_FULL_PATH
-    out_path = os.path.join(
-        shared.CONSTANTS.DATA_DIR, 'gigaword_tokenized_cat',
-        'gigaword-tokenized-cat-{vocab}.txt'.format(vocab=vocab_size)
+    parser = argparse.ArgumentParser(description=(
+        "Filters corpus, keeping only words found in provided dictionary"
+    ))
+    parser.add_argument(
+        '--in-file', '-i', required=True, help="File name for input corpus"
+    )
+    parser.add_argument(
+        '--out-file', '-o', required=True, help="File name for output corpus"
+    )
+    parser.add_argument(
+        '--dictionary', '-d', required=True, help=(
+            "Directory containing the dictionary, relative to cooccurrences dir"
+        )
     )
 
-    # Get the set of top-k words (k=vocab_size).
-    dictionary = h.dictionary.Dictionary.load(os.path.join(
-        shared.CONSTANTS.COOCCURRENCE_DIR, '5w', 'all-5w', 'dictionary'))
-    dictionary = set(dictionary.tokens[:vocab_size])
+    # Parse the arguments
+    args = vars(parser.parse_args())
 
-    print((
-        'reading from {in_path}, writing to {out_path}, '
-        'keeping top {vocab} words.'
-    ).format(in_path=in_path, out_path=out_path, vocab=len(dictionary)))
+    # Corpus path and output directory are relative to standard locations.
+    args['in_file'] = os.path.join(
+        shared.CONSTANTS.TOKENIZED_CAT_DIR, args['in_file']
+    )
+    args['out_file'] = os.path.join(
+        shared.CONSTANTS.TOKENIZED_CAT_DIR, args['out_file']
+    )
+    args['dictionary'] = h.dictionary.Dictionary.load(os.path.join(
+        shared.CONSTANTS.COOCCURRENCE_DIR, args['dictionary'], 
+        'dictionary'
+    ))
 
-    filter_tokens(in_path, out_path, dictionary)
+    print('reading from {}, writing to {}.'.format(
+        args['in_file'], args['out_file']))
+
+    filter_tokens(**args)
 

@@ -12,6 +12,7 @@ def make_w2v_embeddings(
     window=5,
     k=15,
     t_undersample=1,
+    alpha_smoothing=0.75,
     processes=1,
     min_count=1,
     seed=None,
@@ -43,6 +44,7 @@ def make_w2v_embeddings(
         '-negative', str(k),
         '-hs', str(hierarchical_sample),
         '-sample', str(t_undersample),
+        '-power', str(alpha_smoothing),
         '-threads', str(processes),
         '-binary', str(binary), 
         '-min-count', str(min_count),
@@ -72,10 +74,6 @@ if __name__ == '__main__':
         help="Directory in which to write embeddings."
     )
     parser.add_argument(
-        '--t-undersample', '-t', type=float, required=True,
-        help="Post-sampling (clean) Common word undersampling threshold"
-    )
-    parser.add_argument(
         '--processes', '-p', type=int, default=1, 
         help="Number of processes to use for parallelization."
     )
@@ -89,6 +87,20 @@ if __name__ == '__main__':
     parser.add_argument(
         '--iterations', '-i', type=int, default=5, 
         help="Number of iterations (epochs) to run."
+    )
+
+    # Hyperparams
+    parser.add_argument(
+        '--t-undersample', '-t', type=float, required=True,
+        help="Post-sampling (clean) Common word undersampling threshold"
+    )
+    parser.add_argument(
+        '--alpha-smoothing', '-a', type=float, default=0.75,
+        help="Exponent used for unigram smoothing."
+    )
+    parser.add_argument(
+        '--k', '-k', type=int, default=15,
+        help="Exponent used for unigram smoothing."
     )
 
     args = vars(parser.parse_args())

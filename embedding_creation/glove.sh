@@ -27,8 +27,9 @@ MAX_ITER=$6
 WINDOW_SIZE=$7
 NUM_THREADS=$8
 X_MAX=$9
-SAVE_MODE=${10}
-STATS_PATH=${11}
+ALPHA=${10}
+SAVE_MODE=${11}
+STATS_PATH=${12}
 
 BINARY=0
 
@@ -70,7 +71,7 @@ fi
 
 # Train the model.
 echo "$ $BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -model $SAVE_MODE -iter $MAX_ITER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE"
-$BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -model $SAVE_MODE -iter $MAX_ITER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE
+$BUILDDIR/glove -save-file $SAVE_FILE -threads $NUM_THREADS -input-file $COOCCURRENCE_SHUF_FILE -x-max $X_MAX -alpha $ALPHA -model $SAVE_MODE -iter $MAX_ITER -vector-size $VECTOR_SIZE -binary $BINARY -vocab-file $VOCAB_FILE -verbose $VERBOSE
 
 #if [ "$CORPUS" = 'text8' ]; then
 #   if [ "$1" = 'matlab' ]; then

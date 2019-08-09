@@ -17,5 +17,7 @@ binary=0
 
 mkdir -p $out_dir
 
-time $W2V_EXECUTABLE_PATH -train $corpus -output $vectors_path -cbow $mode -size $d -window $window_size -negative $k -hs $hierarchical_sample -sample $t_undersample -threads $threads -binary $binary -iter $num_iterations
+#time $W2V_EXECUTABLE_PATH -train $corpus -output $vectors_path -cbow $mode -size $d -window $window_size -negative $k -hs $hierarchical_sample -sample $t_undersample -threads $threads -binary $binary -iter $num_iterations
+
+echo yo
 

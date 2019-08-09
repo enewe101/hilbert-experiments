@@ -245,7 +245,6 @@ class TestBigramExtraction(TestCase):
                 )
 
 
-
     def test_extract_bigram_parallel(self):
 
         corpus_path = dp.CONSTANTS.TOKENIZED_CAT_TEST_PATH
@@ -260,7 +259,7 @@ class TestBigramExtraction(TestCase):
         pristine_unigram = copy.deepcopy(unigram)
 
         # Test for different numbers of worker processes
-        for num_workers in range(1, 5):
+        for num_workers in range(1,2):#, 5):
 
             # Test extracting using flat weighting
             expected_counts = Counter()
@@ -285,7 +284,6 @@ class TestBigramExtraction(TestCase):
 
             # Verify that the unigram is unaffected
             self.assertTrue(np.array_equal(bigram.unigram.Nx, unigram.Nx))
-
 
             # Test extracting using harmonic weighting
             expected_counts = Counter()
